@@ -1,0 +1,16 @@
+{
+  "name": "BIG PICTURE 정산관리",
+  "short_name": "BIG PICTURE",
+  "start_url": "/home",
+  "display": "standalone",
+  "background_color": "#f5f3ec",
+  "theme_color": "#14161a",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

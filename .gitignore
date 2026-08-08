@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+.env*.local
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+
+# Supabase Access Token (설정용, 커밋 금지)
+.supabase-token
+
+# Supabase DB 비밀번호 (커밋 금지)
+.supabase-db-password
+
+# Vercel
+.vercel

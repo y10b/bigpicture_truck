@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+/* ──────────────────────────────────────────────────────────
+   BIG PICTURE — 로고에서 뽑아낸 팔레트
+   그린(글자) / 옐로우(아웃라인) / 오프화이트(배경) / 잉크(테두리)
+   ────────────────────────────────────────────────────────── */
+@theme {
+  --color-paper: #f5f3ec;
+  --color-paper-2: #ecebe2;
+  --color-card: #ffffff;
+
+  --color-ink: #14161a;
+  --color-ink-2: #2a2e33;
+  --color-ink-3: #5b6169;
+  --color-ink-4: #8d949c;
+
+  --color-brand-50: #eef6ea;
+  --color-brand-100: #d7ecd0;
+  --color-brand-200: #b0d9a3;
+  --color-brand-300: #86c473;
+  --color-brand-400: #5ea94b;
+  --color-brand-500: #4a8f3a;
+  --color-brand-600: #3c7530;
+  --color-brand-700: #2f5c26;
+  --color-brand-900: #1c3717;
+
+  --color-accent: #e9c230;
+  --color-accent-soft: #f7e9a8;
+  --color-accent-deep: #b8930f;
+
+  --color-danger: #c0392b;
+  --color-danger-soft: #fbe9e7;
+
+  /* 그래프 3계열 — 색각이상(적록/청황) 판별 검사를 통과한 조합입니다.
+     UI 크롬의 브랜드 그린/옐로우와는 별도로 관리하세요. */
+  --color-chart-credit: #2f7a45; /* 신용 */
+  --color-chart-cod: #c39412; /* 착불 */
+  --color-chart-extra: #7a5cb5; /* 추가금 */
+  --color-grid: #e7e5db;
+
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system,
+    BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Malgun Gothic",
+    sans-serif;
+
+  --radius-xl2: 1.125rem;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  /* iOS 하단 홈바 대응 */
+  min-height: 100dvh;
+}
+
+/* 숫자는 표에서 자릿수가 흔들리지 않게 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* 모바일에서 input 포커스 시 확대 방지 (16px 이상 유지) */
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  font-size: 16px;
+}
+
+/* 숫자 입력의 스피너 제거 */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* 로고의 그래피티 아웃라인 느낌을 제목에 아주 옅게 */
+.graffiti {
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 0 var(--color-accent);
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-ink);
+}
+
+/* 스크롤바 (데스크톱) */
+@media (pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d5d3c9;
+    border-radius: 99px;
+    border: 3px solid var(--color-paper);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.28s ease-out both;
+}
