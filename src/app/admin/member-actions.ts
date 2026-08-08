@@ -24,7 +24,7 @@ export async function createMember(
   const name = String(formData.get("name") ?? "").trim();
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
   const role = String(formData.get("role") ?? "employee") === "admin" ? "admin" : "employee";
-  const memo = String(formData.get("memo") ?? "").trim() || null;
+  const text = (k: string) => String(formData.get(k) ?? "").trim() || null;
 
   // 비워두면 임시 비밀번호를 자동으로 만들어 줍니다.
   const typed = String(formData.get("password") ?? "");
@@ -62,7 +62,10 @@ export async function createMember(
       name,
       phone,
       role,
-      memo,
+      vehicle_no: text("vehicle_no"),
+      vehicle_type: text("vehicle_type"),
+      bank_account: text("bank_account"),
+      memo: text("memo"),
       // 관리자가 정해준 비밀번호이므로 첫 로그인 때 본인이 바꾸게 합니다.
       must_change_password: true,
     });
@@ -126,20 +129,95 @@ export async function resetMemberPassword(
   return { ok: true, tempPassword: next };
 }
 
-/** 직원 정보 수정 (이름 / 메모) */
+/** 직원 정보 수정 — 이름 · 휴대폰번호 · 차량번호 · 차종 · 계좌 · 메모 */
 export async function updateMember(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
-  const memo = String(formData.get("memo") ?? "").trim() || null;
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  const text = (k: string) => String(formData.get(k) ?? "").trim() || null;
 
   if (!id || !name) return { ok: false, error: "이름을 입력해 주세요." };
+  if (phone.length < 10) return { ok: false, error: "휴대폰번호를 정확히 입력해 주세요." };
 
   const admin = createAdminClient();
-  const { error } = await admin.from("profiles").update({ name, memo }).eq("id", id);
-  if (error) return { ok: false, error: "수정에 실패했습니다." };
+
+  // 번호가 곧 로그인 아이디라, 바뀌면 Auth 쪽 이메일도 같이 옮겨야 합니다.
+  const { data: before } = await admin
+    .from("profiles")
+    .select("phone")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (before && before.phone !== phone) {
+    const { error: authError } = await admin.auth.admin.updateUserById(id, {
+      email: phoneToEmail(phone),
+      email_confirm: true,
+    });
+    if (authError) {
+      return {
+        ok: false,
+        error: authError.message?.toLowerCase().includes("already")
+          ? "이미 등록된 휴대폰번호입니다."
+          : "휴대폰번호 변경에 실패했습니다.",
+      };
+    }
+  }
+
+  const { error } = await admin
+    .from("profiles")
+    .update({
+      name,
+      phone,
+      vehicle_no: text("vehicle_no"),
+      vehicle_type: text("vehicle_type"),
+      bank_account: text("bank_account"),
+      memo: text("memo"),
+    })
+    .eq("id", id);
+
+  if (error) {
+    return {
+      ok: false,
+      error: error.code === "23505"
+        ? "이미 등록된 휴대폰번호입니다."
+        : "수정에 실패했습니다.",
+    };
+  }
 
   revalidatePath("/admin/members");
+  return { ok: true };
+}
+
+/**
+ * 권한 변경 — 직원 ↔ 관리자.
+ * 본인 권한은 바꿀 수 없고, 마지막 남은 관리자도 내릴 수 없습니다.
+ * (아무도 관리자 화면에 못 들어가는 상태가 되면 복구가 번거롭습니다)
+ */
+export async function setMemberRole(id: string, role: "employee" | "admin") {
+  const me = await requireAdmin();
+  if (me.id === id) {
+    return { ok: false, error: "본인 권한은 바꿀 수 없습니다." };
+  }
+
+  const admin = createAdminClient();
+
+  if (role === "employee") {
+    const { count } = await admin
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "admin")
+      .eq("active", true);
+    if ((count ?? 0) <= 1) {
+      return { ok: false, error: "관리자가 한 명뿐이라 내릴 수 없습니다." };
+    }
+  }
+
+  const { error } = await admin.from("profiles").update({ role }).eq("id", id);
+  if (error) return { ok: false, error: "변경에 실패했습니다." };
+
+  revalidatePath("/admin/members");
+  revalidatePath("/admin");
   return { ok: true };
 }
 

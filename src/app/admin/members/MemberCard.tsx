@@ -6,6 +6,7 @@ import {
   deleteMember,
   resetMemberPassword,
   setMemberActive,
+  setMemberRole,
   updateMember,
 } from "../member-actions";
 import { Alert, Badge, Button, Card, Field, Input, cn } from "@/components/ui";
@@ -24,7 +25,9 @@ export default function MemberCard({
   stat?: Settlement;
   isMe: boolean;
 }) {
-  const [panel, setPanel] = useState<null | "edit" | "password" | "delete">(null);
+  const [panel, setPanel] = useState<
+    null | "edit" | "password" | "delete" | "role"
+  >(null);
   const [issued, setIssued] = useState<string>();
   const [note, setNote] = useState<string>();
   const [error, setError] = useState<string>();
@@ -58,6 +61,16 @@ export default function MemberCard({
           <p className="tnum mt-0.5 text-[12px] text-ink-3">
             {prettyPhone(profile.phone)}
           </p>
+          {(profile.vehicle_no || profile.vehicle_type) && (
+            <p className="mt-0.5 truncate text-[12px] text-ink-4">
+              🚚 {[profile.vehicle_no, profile.vehicle_type].filter(Boolean).join(" · ")}
+            </p>
+          )}
+          {profile.bank_account && (
+            <p className="tnum mt-0.5 truncate text-[12px] text-ink-4">
+              💳 {profile.bank_account}
+            </p>
+          )}
           {profile.memo && (
             <p className="mt-0.5 truncate text-[12px] text-ink-4">{profile.memo}</p>
           )}
@@ -109,6 +122,16 @@ export default function MemberCard({
           비밀번호
         </button>
         <button
+          disabled={isMe}
+          className="flex-1 py-2.5 transition-colors active:bg-paper-2 disabled:opacity-35"
+          onClick={() => setPanel(panel === "role" ? null : "role")}
+        >
+          권한
+        </button>
+      </div>
+
+      <div className="flex divide-x divide-ink/8 border-t border-ink/8 text-[12px] font-bold text-ink-3">
+        <button
           disabled={isMe || pending}
           className="flex-1 py-2.5 transition-colors active:bg-paper-2 disabled:opacity-35"
           onClick={() =>
@@ -152,10 +175,53 @@ export default function MemberCard({
             }}
             className="space-y-3"
           >
-            <Field label="이름">
+            <Field label="이름" required>
               <Input name="name" defaultValue={profile.name} />
             </Field>
-            <Field label="메모">
+
+            <Field label="휴대폰번호" required hint="로그인 아이디">
+              <Input
+                name="phone"
+                type="tel"
+                inputMode="numeric"
+                defaultValue={prettyPhone(profile.phone)}
+                className="tnum"
+              />
+              <span className="mt-1 block text-[12px] leading-relaxed text-ink-4">
+                업무용 폰 말고 <b className="text-ink-3">본인 실제 번호</b>로 두세요.
+                바꾸면 다음 로그인부터 새 번호를 씁니다.
+              </span>
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="차량번호" optional>
+                <Input
+                  name="vehicle_no"
+                  defaultValue={profile.vehicle_no ?? ""}
+                  placeholder="12가3456"
+                  maxLength={20}
+                />
+              </Field>
+              <Field label="차종" optional>
+                <Input
+                  name="vehicle_type"
+                  defaultValue={profile.vehicle_type ?? ""}
+                  placeholder="1톤 냉장"
+                  maxLength={30}
+                />
+              </Field>
+            </div>
+
+            <Field label="계좌" optional hint="급여 입금용">
+              <Input
+                name="bank_account"
+                defaultValue={profile.bank_account ?? ""}
+                placeholder="국민 123456-01-234567"
+                maxLength={60}
+              />
+            </Field>
+
+            <Field label="메모" optional>
               <Input name="memo" defaultValue={profile.memo ?? ""} maxLength={60} />
             </Field>
             <div className="flex gap-2">
@@ -189,6 +255,44 @@ export default function MemberCard({
               })
             }
           />
+        </div>
+      )}
+
+      {panel === "role" && (
+        <div className="border-t border-ink/8 bg-paper-2/50 p-4">
+          <p className="text-[13px] leading-relaxed text-ink-3">
+            지금은 <b>{profile.role === "admin" ? "관리자" : "직원"}</b>입니다.
+            {profile.role === "employee"
+              ? " 관리자로 올리면 전 직원의 정산과 공지를 관리할 수 있게 됩니다."
+              : " 직원으로 내리면 관리자 화면에 못 들어갑니다. 본인 정산 입력은 그대로 됩니다."}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setPanel(null)}>
+              취소
+            </Button>
+            <Button
+              variant={profile.role === "employee" ? "primary" : "outline"}
+              className="flex-1"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  setError(undefined);
+                  const next = profile.role === "admin" ? "employee" : "admin";
+                  const res = await setMemberRole(profile.id, next);
+                  if (res.ok) {
+                    setPanel(null);
+                    flash(
+                      next === "admin"
+                        ? "관리자로 변경했습니다."
+                        : "직원으로 변경했습니다.",
+                    );
+                  } else setError(res.error);
+                })
+              }
+            >
+              {profile.role === "admin" ? "직원으로 내리기" : "관리자로 올리기"}
+            </Button>
+          </div>
         </div>
       )}
 

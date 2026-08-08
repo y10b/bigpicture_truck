@@ -8,6 +8,12 @@ export type Profile = {
   role: Role;
   active: boolean;
   memo: string | null;
+  /** 차량번호 (예: 12가3456) */
+  vehicle_no: string | null;
+  /** 차종 (예: 1톤 냉장) */
+  vehicle_type: string | null;
+  /** 급여 입금 계좌 */
+  bank_account: string | null;
   notices_seen_at: string | null;
   /** 관리자가 발급한 임시 비밀번호를 아직 안 바꾼 상태 */
   must_change_password: boolean;
@@ -47,6 +53,8 @@ export type Notice = {
   id: string;
   title: string;
   body: string;
+  /** AI가 매긴 문단별 강조 서식. null 이면 body 를 그대로 보여줍니다. */
+  blocks: unknown;
   pinned: boolean;
   author_id: string | null;
   created_at: string;

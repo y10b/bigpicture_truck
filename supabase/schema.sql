@@ -397,3 +397,91 @@ from public.entries e
 group by e.user_id, e.work_date;
 
 notify pgrst, 'reload schema';
+
+-- ═══════════════════════════════════════════════════════════════
+--  AI (Gemini) 관련  (2026-08 추가)
+-- ═══════════════════════════════════════════════════════════════
+
+-- 공지 서식: 저장할 때 AI가 한 번만 매기고, 이후에는 조회만 합니다.
+-- [{ "style": "title"|"warn"|"strong"|"body", "text": "..." }, ...]
+alter table public.notices
+  add column if not exists blocks jsonb;
+
+comment on column public.notices.blocks is
+  '문단별 강조 서식. null 이면 body 를 그대로 렌더링합니다.';
+
+-- AI 생성물 캐시 — 같은 내용을 다시 만들지 않도록 하루 1건만 저장합니다.
+create table if not exists public.ai_reports (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references public.profiles(id) on delete cascade,
+  report_date date not null,
+  kind        text not null check (kind in ('coach', 'daily')),
+  content     jsonb not null,
+  created_at  timestamptz not null default now(),
+  unique (user_id, report_date, kind)
+);
+
+create index if not exists ai_reports_lookup_idx
+  on public.ai_reports (user_id, report_date desc, kind);
+
+alter table public.ai_reports enable row level security;
+
+drop policy if exists ai_reports_own on public.ai_reports;
+create policy ai_reports_own on public.ai_reports for all
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+drop policy if exists ai_reports_admin on public.ai_reports;
+create policy ai_reports_admin on public.ai_reports for all
+  using (public.is_admin()) with check (public.is_admin());
+
+-- 코칭에 쓸 "전 직원 평균" — 개인 식별 정보 없이 숫자만 돌려줍니다.
+create or replace function public.team_daily_stats(from_date date, to_date date)
+returns table (
+  worker_days      int,   -- (직원 × 근무일) 수
+  avg_day_total    int,   -- 1인 1일 평균 매출
+  avg_day_count    numeric, -- 1인 1일 평균 건수
+  avg_unit_price   int,   -- 건당 평균 단가
+  median_day_total int
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with d as (
+    select user_id, work_date, sum(total)::int as total, sum(count)::int as cnt
+    from public.entries
+    where work_date between from_date and to_date
+    group by user_id, work_date
+    having sum(total) > 0
+  )
+  select
+    count(*)::int,
+    coalesce(avg(total), 0)::int,
+    round(coalesce(avg(cnt), 0), 1),
+    case when sum(cnt) > 0 then (sum(total) / sum(cnt))::int else 0 end,
+    coalesce(percentile_cont(0.5) within group (order by total), 0)::int
+  from d;
+$$;
+
+grant execute on function public.team_daily_stats(date, date) to authenticated;
+
+notify pgrst, 'reload schema';
+
+-- ───────────────────────────────────────────────
+-- 11. 직원 상세 정보 (차량번호 · 차종 · 계좌)
+--     기존 memo 하나로 뭉쳐 쓰던 것을 칸으로 나눕니다.
+-- ───────────────────────────────────────────────
+alter table public.profiles
+  add column if not exists vehicle_no   text,  -- 차량번호 (예: 12가3456)
+  add column if not exists vehicle_type text,  -- 차종 (예: 1톤 냉장)
+  add column if not exists bank_account text;  -- 계좌 (은행 + 번호)
+
+comment on column public.profiles.bank_account is '급여 입금 계좌. 관리자와 본인만 볼 수 있습니다(RLS).';
+
+-- 기존 memo 에 적어둔 내용을 차량번호 칸으로 한 번만 옮겨 둡니다.
+update public.profiles
+   set vehicle_no = memo
+ where vehicle_no is null and memo is not null and memo <> '';
+
+notify pgrst, 'reload schema';

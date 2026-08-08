@@ -13,9 +13,11 @@ import {
   settleFromDaily,
 } from "@/lib/settlement";
 import type { DayTotals, Entry, Withdrawal } from "@/lib/types";
+import type { Coach, DailyReport } from "../ai-actions";
 import DateNav from "@/components/DateNav";
 import TotalsCard, { sumTotals } from "@/components/TotalsCard";
 import { Card } from "@/components/ui";
+import AiPanel from "./AiPanel";
 import EntryComposer from "./EntryComposer";
 import EntryList from "./EntryList";
 import WithdrawalPanel from "./WithdrawalPanel";
@@ -65,6 +67,19 @@ export default async function HomePage({
       .order("created_at", { ascending: false }),
     supabase.from("app_settings").select("weekday_levy").eq("id", 1).maybeSingle(),
   ]);
+
+  // 이미 만들어 둔 AI 결과가 있으면 바로 보여줍니다 (없으면 버튼만).
+  const { data: aiRows } = await supabase
+    .from("ai_reports")
+    .select("kind, content")
+    .eq("user_id", profile.id)
+    .eq("report_date", workDate);
+
+  const cachedCoach =
+    (aiRows?.find((r) => r.kind === "coach")?.content as Coach | undefined) ?? null;
+  const cachedReport =
+    (aiRows?.find((r) => r.kind === "daily")?.content as DailyReport | undefined) ??
+    null;
 
   const entries = (entryData ?? []) as Entry[];
   const totals = sumTotals(entries);
@@ -128,6 +143,14 @@ export default async function HomePage({
         </h2>
         <EntryList entries={entries} />
       </section>
+
+      <AiPanel
+        workDate={workDate}
+        isToday={workDate === today}
+        hasEntries={entries.length > 0}
+        initialCoach={cachedCoach}
+        initialReport={cachedReport}
+      />
 
       <WithdrawalPanel
         workDate={workDate}

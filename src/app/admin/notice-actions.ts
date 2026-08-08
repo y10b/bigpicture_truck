@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeBlocks } from "@/lib/notice-blocks";
 
 export type NoticeState = { error?: string };
 
@@ -21,11 +22,25 @@ export async function saveNotice(
 
   if (!title) return { error: "제목을 입력해 주세요." };
 
+  // AI 서식은 저장할 때 한 번만 넣어두고, 이후에는 읽기만 합니다.
+  const rawBlocks = formData.get("blocks");
+  let blocks = null;
+  if (typeof rawBlocks === "string" && rawBlocks) {
+    try {
+      blocks = normalizeBlocks(JSON.parse(rawBlocks));
+    } catch {
+      blocks = null;
+    }
+  }
+
   const { error } = id
-    ? await supabase.from("notices").update({ title, body, pinned }).eq("id", id)
+    ? await supabase
+        .from("notices")
+        .update({ title, body, pinned, blocks })
+        .eq("id", id)
     : await supabase
         .from("notices")
-        .insert({ title, body, pinned, author_id: admin.id });
+        .insert({ title, body, pinned, blocks, author_id: admin.id });
 
   if (error) return { error: "저장에 실패했습니다. 다시 시도해 주세요." };
 

@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { prettyDateTime } from "@/lib/format";
 import type { Notice } from "@/lib/types";
 import { Badge, Card } from "@/components/ui";
+import NoticeBody from "@/components/NoticeBody";
+import { normalizeBlocks } from "@/lib/notice-blocks";
 
 export default async function NoticeDetailPage({
   params,
@@ -49,9 +51,7 @@ export default async function NoticeDetailPage({
         </h1>
 
         <div className="mt-4 border-t border-ink/8 pt-4">
-          <p className="text-[15px] leading-[1.75] whitespace-pre-wrap text-ink-2">
-            {notice.body}
-          </p>
+          <NoticeBody blocks={normalizeBlocks(notice.blocks)} body={notice.body} />
         </div>
       </Card>
     </div>

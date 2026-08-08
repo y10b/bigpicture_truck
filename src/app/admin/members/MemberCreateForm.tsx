@@ -98,6 +98,10 @@ export default function MemberCreateForm() {
             onChange={(e) => setPhone(hyphenate(e.target.value))}
             className="tnum"
           />
+          <span className="mt-1 block text-[12px] leading-relaxed text-ink-4">
+            업무용 폰이 아니라 <b className="text-ink-3">본인 실제 번호</b>를 받아
+            주세요. 폰을 바꾸거나 반납하면 로그인이 막힙니다.
+          </span>
           {phone.length > 0 && !phoneOk && (
             <span className="mt-1 block text-[12px] font-medium text-danger">
               번호를 끝까지 입력해 주세요.
@@ -167,8 +171,21 @@ export default function MemberCreateForm() {
           )}
         </div>
 
-        <Field label="메모" optional hint="차량번호 등">
-          <Input name="memo" placeholder="예: 12가3456 / 1톤" maxLength={60} />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="차량번호" optional>
+            <Input name="vehicle_no" placeholder="12가3456" maxLength={20} />
+          </Field>
+          <Field label="차종" optional>
+            <Input name="vehicle_type" placeholder="1톤 냉장" maxLength={30} />
+          </Field>
+        </div>
+
+        <Field label="계좌" optional hint="급여 입금용">
+          <Input name="bank_account" placeholder="국민 123456-01-234567" maxLength={60} />
+        </Field>
+
+        <Field label="메모" optional>
+          <Input name="memo" placeholder="그 밖에 남길 내용" maxLength={60} />
         </Field>
 
         {state.error && <Alert>{state.error}</Alert>}
