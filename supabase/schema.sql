@@ -239,12 +239,12 @@ grant execute on function public.admin_totals_by_day(date, date)  to authenticat
 -- on conflict (id) do update set role = 'admin', active = true;
 
 -- ═══════════════════════════════════════════════════════════════
---  상납금 · 출금  (2026-08 추가)
+--  사납금 · 출금  (2026-08 추가)
 -- ═══════════════════════════════════════════════════════════════
 
 -- ───────────────────────────────────────────────
 -- 7. app_settings — 회사 공통 설정 (한 행만 존재)
---    weekday_levy: 평일 근무 하루당 상납금. 주말(토·일)은 면제입니다.
+--    weekday_levy: 평일 근무 하루당 사납금. 주말(토·일)은 면제입니다.
 -- ───────────────────────────────────────────────
 create table if not exists public.app_settings (
   id           integer primary key default 1 check (id = 1),
@@ -301,7 +301,7 @@ create policy withdrawals_admin on public.withdrawals for all
 
 -- ───────────────────────────────────────────────
 -- 9. 집계 함수 갱신
---    weekday_days = 평일 근무일수 (상납금 계산 기준)
+--    weekday_days = 평일 근무일수 (사납금 계산 기준)
 --    withdrawn    = 기간 내 출금 합계
 -- ───────────────────────────────────────────────
 drop function if exists public.admin_totals_by_user(date, date);
@@ -345,7 +345,7 @@ as $$
       sum(en.extra)  as extra,
       sum(en.total)  as total,
       count(distinct en.work_date) as days,
-      -- ISO 요일: 1=월 … 5=금, 6=토, 7=일 → 평일만 상납금 대상
+      -- ISO 요일: 1=월 … 5=금, 6=토, 7=일 → 평일만 사납금 대상
       count(distinct en.work_date) filter (
         where extract(isodow from en.work_date) <= 5
       ) as weekday_days

@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { fillDailySeries, resolvePeriod } from "@/lib/period";
 import { prettyDate, todayKST, won } from "@/lib/format";
-import { DEFAULT_WEEKDAY_LEVY, settleFromUserTotals } from "@/lib/settlement";
+import { DEFAULT_LEVY_AMOUNT, settleFromUserTotals } from "@/lib/settlement";
 import type { DayTotals, Profile, UserTotals } from "@/lib/types";
 import { Badge, Card, CardHeader, Empty } from "@/components/ui";
 import PeriodPicker from "@/components/PeriodPicker";
@@ -51,7 +51,7 @@ export default async function AdminDashboard({
       .eq("work_date", today),
     // 직원 표는 작으므로 그대로 읽어 뱃지(관리자/비활성)에 씁니다.
     supabase.from("profiles").select("id, role, active"),
-    supabase.from("app_settings").select("weekday_levy").eq("id", 1).maybeSingle(),
+    supabase.from("app_settings").select("levy_amount, levy_days_per_week").eq("id", 1).maybeSingle(),
   ]);
 
   const daily = (dayData ?? []) as DayTotals[];
@@ -59,7 +59,7 @@ export default async function AdminDashboard({
   const profiles = (profileData ?? []) as Pick<Profile, "id" | "role" | "active">[];
   const metaOf = new Map(profiles.map((p) => [p.id, p]));
 
-  const levyRate = settings?.weekday_levy ?? DEFAULT_WEEKDAY_LEVY;
+  const levyRate = settings?.levy_amount ?? DEFAULT_LEVY_AMOUNT;
 
   const ranking = ((userData ?? []) as UserTotals[]).map((r) => ({
     ...r,
@@ -147,7 +147,7 @@ export default async function AdminDashboard({
 
       <div className="grid grid-cols-2 gap-3">
         <Card className="px-4 py-3">
-          <p className="text-[12px] font-semibold text-ink-4">상납금 합계</p>
+          <p className="text-[12px] font-semibold text-ink-4">사납금 합계</p>
           <p className="tnum mt-0.5 text-[17px] font-extrabold">
             {won(totalLevy)}원
           </p>
@@ -211,7 +211,7 @@ export default async function AdminDashboard({
                         {!r.active && <Badge>비활성</Badge>}
                       </div>
                       <p className="tnum mt-0.5 text-[12px] text-ink-4">
-                        {r.count}건 · {r.days}일 (평일 {r.weekday_days}) · 상납{" "}
+                        {r.count}건 · {r.days}일 (사납 {r.levy_days}) ·{" "}
                         {won(r.s.levy)}
                       </p>
                       <p className="tnum mt-0.5 text-[12px] font-semibold text-ink-3">

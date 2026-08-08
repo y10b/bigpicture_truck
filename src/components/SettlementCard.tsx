@@ -3,19 +3,21 @@ import { Card, cn } from "@/components/ui";
 import type { Settlement } from "@/lib/settlement";
 
 /**
- * 매출에서 상납금을 빼 실제로 손에 쥐는 금액을 보여줍니다.
+ * 매출에서 사납금을 빼 실제로 손에 쥐는 금액을 보여줍니다.
  * 출금 기록이 있는 화면에서는 남은 금액까지 이어서 보여줍니다.
  */
 export default function SettlementCard({
   label,
   s,
   levyRate,
+  levyDaysPerWeek = 5,
   showWithdraw = true,
   className,
 }: {
   label: string;
   s: Settlement;
   levyRate: number;
+  levyDaysPerWeek?: number;
   showWithdraw?: boolean;
   className?: string;
 }) {
@@ -30,16 +32,20 @@ export default function SettlementCard({
           <span className="text-[15px] font-semibold text-paper/60">원</span>
         </div>
         <p className="mt-1 text-[12px] font-medium text-paper/50">
-          실수령 · 상납금 뺀 금액
+          실수령 · 사납금 뺀 금액
         </p>
       </div>
 
       <div className="divide-y divide-ink/6">
         <Row label="매출 합계" value={s.total} sub={`근무 ${s.workedDays}일`} />
         <Row
-          label="상납금"
+          label="사납금"
           value={-s.levy}
-          sub={`평일 ${s.levyDays}일 × ${won(levyRate)}원 · 주말 면제`}
+          sub={
+            s.freeDays > 0
+              ? `${s.levyDays}일 × ${won(levyRate)}원 · ${s.freeDays}일은 면제 (주 ${levyDaysPerWeek}일 채운 뒤 근무)`
+              : `${s.levyDays}일 × ${won(levyRate)}원`
+          }
           tone="minus"
         />
         {showWithdraw && (

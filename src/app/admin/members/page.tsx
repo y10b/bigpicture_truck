@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { startOfMonth, todayKST } from "@/lib/format";
-import { DEFAULT_WEEKDAY_LEVY, settleFromUserTotals } from "@/lib/settlement";
+import { DEFAULT_LEVY_AMOUNT, settleFromUserTotals } from "@/lib/settlement";
 import type { Profile, UserTotals } from "@/lib/types";
 import { Card, Empty } from "@/components/ui";
 import LevySettings from "./LevySettings";
@@ -27,11 +27,12 @@ export default async function MembersPage() {
         from_date: startOfMonth(today),
         to_date: today,
       }),
-      supabase.from("app_settings").select("weekday_levy").eq("id", 1).maybeSingle(),
+      supabase.from("app_settings").select("levy_amount, levy_days_per_week").eq("id", 1).maybeSingle(),
     ]);
 
   const profiles = (profileData ?? []) as Profile[];
-  const levyRate = settings?.weekday_levy ?? DEFAULT_WEEKDAY_LEVY;
+  const levyRate = settings?.levy_amount ?? DEFAULT_LEVY_AMOUNT;
+  const levyDays = settings?.levy_days_per_week ?? 5;
 
   const stats = new Map(
     ((totalsData ?? []) as UserTotals[]).map((r) => [
@@ -49,7 +50,7 @@ export default async function MembersPage() {
         </span>
       </div>
 
-      <LevySettings current={levyRate} />
+      <LevySettings amount={levyRate} daysPerWeek={levyDays} />
 
       <MemberCreateForm />
 

@@ -80,7 +80,7 @@ export default function MemberCard({
                 이번 달 매출 {won(stat.total)}원
                 <span className="font-normal text-ink-4">
                   {" "}
-                  · 상납 {won(stat.levy)}
+                  · 사납 {won(stat.levy)}
                 </span>
               </p>
               <p className="tnum text-[12px] font-bold text-brand-600">

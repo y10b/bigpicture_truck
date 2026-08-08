@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { fillDailySeries, resolvePeriod } from "@/lib/period";
-import { prettyDate, prettyPhone, won } from "@/lib/format";
-import { DEFAULT_WEEKDAY_LEVY, settleFromDaily } from "@/lib/settlement";
+import { endOfWeek, prettyDate, prettyPhone, startOfWeek, won } from "@/lib/format";
+import { DEFAULT_LEVY_AMOUNT, settleFromDaily } from "@/lib/settlement";
 import type { DayTotals, Entry, Profile, Withdrawal } from "@/lib/types";
 import { Badge, Card, CardHeader, Empty } from "@/components/ui";
 import PeriodPicker from "@/components/PeriodPicker";
@@ -34,12 +34,13 @@ export default async function MemberDetailPage({
   ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", id).maybeSingle(),
       // 합계·그래프는 날짜별로 합쳐진 뷰에서 (1000행 제한을 타지 않게)
+      // 사납금 순번이 맞도록 주 단위로 넓혀 읽고, 표시할 때 기간으로 자릅니다.
       supabase
         .from("v_daily_totals")
         .select("work_date, count, credit, cod, extra, total")
         .eq("user_id", id)
-        .gte("work_date", period.from)
-        .lte("work_date", period.to)
+        .gte("work_date", startOfWeek(period.from))
+        .lte("work_date", endOfWeek(period.to))
         .order("work_date", { ascending: true }),
       // 입력 원본은 최근 것만 보여주면 충분합니다
       supabase
@@ -58,21 +59,31 @@ export default async function MemberDetailPage({
         .gte("work_date", period.from)
         .lte("work_date", period.to)
         .order("work_date", { ascending: false }),
-      supabase.from("app_settings").select("weekday_levy").eq("id", 1).maybeSingle(),
+      supabase.from("app_settings").select("levy_amount, levy_days_per_week").eq("id", 1).maybeSingle(),
     ]);
 
   if (!profileData) notFound();
   const profile = profileData as Profile;
-  const daily = (dailyData ?? []) as DayTotals[];
+  const fullWeeks = (dailyData ?? []) as DayTotals[];
+  const daily = fullWeeks.filter(
+    (d) => d.work_date >= period.from && d.work_date <= period.to,
+  );
   const entries = (entryData ?? []) as Entry[];
   const withdrawals = (wdData ?? []) as Withdrawal[];
-  const levyRate = settings?.weekday_levy ?? DEFAULT_WEEKDAY_LEVY;
+  const levyRate = settings?.levy_amount ?? DEFAULT_LEVY_AMOUNT;
+  const levyPerWeek = settings?.levy_days_per_week ?? 5;
 
   const series = fillDailySeries(daily, period.from, period.to);
   const totals = sumTotals(daily);
   const workedDays = series.filter((d) => d.total > 0 || d.count > 0);
   const withdrawn = withdrawals.reduce((a, w) => a + w.amount, 0);
-  const settlement = settleFromDaily(series, levyRate, withdrawn);
+  const settlement = settleFromDaily(
+    series,
+    levyRate,
+    withdrawn,
+    fullWeeks,
+    levyPerWeek,
+  );
 
   return (
     <div className="space-y-4 rise">
@@ -111,6 +122,7 @@ export default async function MemberDetailPage({
         label={`${period.label} 실수령`}
         s={settlement}
         levyRate={levyRate}
+        levyDaysPerWeek={levyPerWeek}
       />
 
       <TotalsCard label={`${period.label} 매출 구성`} totals={totals} />

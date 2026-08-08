@@ -8,8 +8,8 @@ import {
   won,
 } from "@/lib/format";
 import {
-  DEFAULT_WEEKDAY_LEVY,
-  isLevyDay,
+  DEFAULT_LEVY_AMOUNT,
+  levyDates,
   settleFromDaily,
 } from "@/lib/settlement";
 import type { DayTotals, Entry, Withdrawal } from "@/lib/types";
@@ -65,7 +65,7 @@ export default async function HomePage({
       .gte("work_date", weekFrom)
       .lte("work_date", weekTo)
       .order("created_at", { ascending: false }),
-    supabase.from("app_settings").select("weekday_levy").eq("id", 1).maybeSingle(),
+    supabase.from("app_settings").select("levy_amount, levy_days_per_week").eq("id", 1).maybeSingle(),
   ]);
 
   // 이미 만들어 둔 AI 결과가 있으면 바로 보여줍니다 (없으면 버튼만).
@@ -83,16 +83,25 @@ export default async function HomePage({
 
   const entries = (entryData ?? []) as Entry[];
   const totals = sumTotals(entries);
-  const levyRate = settings?.weekday_levy ?? DEFAULT_WEEKDAY_LEVY;
+  const levyRate = settings?.levy_amount ?? DEFAULT_LEVY_AMOUNT;
+  const levyPerWeek = settings?.levy_days_per_week ?? 5;
 
   const weekSeries = (weekDaily ?? []) as DayTotals[];
   const allWithdrawals = (weekWithdrawals ?? []) as Withdrawal[];
   const weekWithdrawn = allWithdrawals.reduce((a, w) => a + w.amount, 0);
-  const week = settleFromDaily(weekSeries, levyRate, weekWithdrawn);
+  const week = settleFromDaily(
+    weekSeries,
+    levyRate,
+    weekWithdrawn,
+    weekSeries,
+    levyPerWeek,
+  );
 
-  // 그날 상납금 — 평일이고 실제로 일한 날에만 붙습니다.
+  // 그날 사납금 — 그 주에 일한 날 중 앞 N일에 들어야 붙습니다.
+  // (평일이든 주말이든 상관없고, N일을 채운 뒤 더 나온 날은 면제)
   const worked = totals.count > 0 || totals.total > 0;
-  const dayLevy = worked && isLevyDay(workDate) ? levyRate : 0;
+  const charged = levyDates(weekSeries, levyPerWeek);
+  const dayLevy = worked && charged.has(workDate) ? levyRate : 0;
 
   // 이번 주에 일한 날 중 가장 마지막 날이면 출금할 때가 된 겁니다.
   const workedDates = weekSeries
@@ -113,12 +122,14 @@ export default async function HomePage({
 
       <TotalsCard label={`${prettyDate(workDate)} 정산`} totals={totals} />
 
-      {/* 그날 상납금 · 실수령 */}
+      {/* 그날 사납금 · 실수령 */}
       {worked && (
         <Card className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
             <p className="text-[12px] font-semibold text-ink-4">
-              {dayLevy > 0 ? "오늘 상납금" : "주말이라 상납금 없음"}
+              {dayLevy > 0
+                ? "이 날 사납금"
+                : `주 ${levyPerWeek}일을 채운 뒤라 면제`}
             </p>
             <p className="tnum mt-0.5 text-[14px] font-bold text-ink-3">
               {dayLevy > 0 ? `−${won(dayLevy)}원` : "면제"}

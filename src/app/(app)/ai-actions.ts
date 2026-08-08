@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { askGeminiJson, GeminiError, TONE_RULES } from "@/lib/gemini";
-import { addDays, prettyDate, todayKST, won } from "@/lib/format";
-import { DEFAULT_WEEKDAY_LEVY, isLevyDay } from "@/lib/settlement";
+import { addDays, endOfWeek, prettyDate, startOfWeek, todayKST, won } from "@/lib/format";
+import { DEFAULT_LEVY_AMOUNT, levyDates } from "@/lib/settlement";
 import type { DayTotals, Entry } from "@/lib/types";
 
 /* ── 코칭 (오늘 목표) ─────────────────────────────────── */
@@ -99,7 +99,7 @@ export async function getCoach(force = false): Promise<{
       .lte("work_date", today)
       .order("work_date", { ascending: false }),
     supabase.rpc("team_daily_stats", { from_date: from, to_date: today }),
-    supabase.from("app_settings").select("weekday_levy").eq("id", 1).maybeSingle(),
+    supabase.from("app_settings").select("levy_amount, levy_days_per_week").eq("id", 1).maybeSingle(),
   ]);
 
   const days = (mine ?? []) as DayTotals[];
@@ -109,7 +109,13 @@ export async function getCoach(force = false): Promise<{
   }
 
   const stats = (Array.isArray(team) ? team[0] : team) as TeamStats | undefined;
-  const levy = settings?.weekday_levy ?? DEFAULT_WEEKDAY_LEVY;
+  const levyAmount = settings?.levy_amount ?? DEFAULT_LEVY_AMOUNT;
+  const levyPerWeek = settings?.levy_days_per_week ?? 5;
+
+  // 오늘 사납금이 붙는지는 "이번 주에 이미 며칠 일했는지"로 갈립니다.
+  const weekFrom = startOfWeek(today);
+  const workedThisWeek = worked.filter((d) => d.work_date >= weekFrom).length;
+  const todayCharged = workedThisWeek < levyPerWeek;
 
   const myAvg = Math.round(worked.reduce((a, d) => a + d.total, 0) / worked.length);
   const myAvgCount =
@@ -122,7 +128,9 @@ export async function getCoach(force = false): Promise<{
 
 ${TONE_RULES}
 
-오늘은 ${prettyDate(today)}입니다. ${isLevyDay(today) ? `평일이라 상납금 ${won(levy)}원이 빠집니다.` : "주말이라 상납금이 없습니다."}
+오늘은 ${prettyDate(today)}입니다.
+사납금 규칙: 그 주에 일한 날을 날짜순으로 세어 앞 ${levyPerWeek}일까지만 하루 ${won(levyAmount)}원을 냅니다. 평일이냐 주말이냐는 상관없습니다.
+이번 주에 이미 ${workedThisWeek}일 일했습니다. ${todayCharged ? `그래서 오늘 일하면 사납금 ${won(levyAmount)}원이 빠집니다.` : `주 ${levyPerWeek}일을 이미 채웠으므로 오늘은 사납금이 없습니다. 번 만큼 그대로 가져갑니다.`}
 
 [이 사람의 최근 30일]
 - 일한 날: ${worked.length}일
@@ -146,7 +154,7 @@ ${TONE_RULES}
 - reason 은 두 문장 이내로, 왜 그 숫자인지 구체적인 수치를 들어 설명하세요.
 - tips 는 2개나 3개. 오늘 바로 할 수 있는 것만 적으세요. 뻔한 말(안전운전 하세요) 대신
   건수와 단가 중 무엇을 올려야 하는지처럼 실제로 판단에 도움이 되는 것을 적으세요.
-- 상납금이 빠지는 날이면 그걸 감안한 이야기를 넣으세요.
+- 사납금이 빠지는 날이면 그걸 감안한 이야기를 넣으세요.
 - 다른 사람과 대놓고 비교하거나 등수를 매기지 마세요. 기분 상하지 않게 쓰세요.`;
 
   try {
@@ -223,8 +231,8 @@ export async function getDailyReport(
         .select("work_date, count, total")
         .eq("user_id", profile.id)
         .gte("work_date", from)
-        .lt("work_date", workDate),
-      supabase.from("app_settings").select("weekday_levy").eq("id", 1).maybeSingle(),
+        .lte("work_date", endOfWeek(workDate)),
+      supabase.from("app_settings").select("levy_amount, levy_days_per_week").eq("id", 1).maybeSingle(),
     ]);
 
   const entries = (entryData ?? []) as Entry[];
@@ -233,15 +241,17 @@ export async function getDailyReport(
   }
 
   const stats = (Array.isArray(team) ? team[0] : team) as TeamStats | undefined;
-  const levyRate = settings?.weekday_levy ?? DEFAULT_WEEKDAY_LEVY;
-  const levy = isLevyDay(workDate) ? levyRate : 0;
+  const levyRate = settings?.levy_amount ?? DEFAULT_LEVY_AMOUNT;
+  const levyPerWeek = settings?.levy_days_per_week ?? 5;
+  const allDaily = (mine ?? []) as DayTotals[];
+  const levy = levyDates(allDaily, levyPerWeek).has(workDate) ? levyRate : 0;
 
   const total = entries.reduce((a, e) => a + e.total, 0);
   const count = entries.reduce((a, e) => a + e.count, 0);
   const expense = entries.reduce((a, e) => a + (e.expense ?? 0), 0);
   const minutes = entries.reduce((a, e) => a + (e.minutes ?? 0), 0);
 
-  const past = ((mine ?? []) as DayTotals[]).filter((d) => d.total > 0);
+  const past = allDaily.filter((d) => d.total > 0 && d.work_date < workDate);
   const myAvg = past.length
     ? Math.round(past.reduce((a, d) => a + d.total, 0) / past.length)
     : 0;
@@ -268,7 +278,7 @@ ${prettyDate(workDate)} 하루 기록입니다.
 [요약]
 - 매출 ${won(total)}원 / ${count}건
 - 건당 평균 ${count ? won(Math.round(total / count)) : 0}원
-- 상납금 ${levy > 0 ? `${won(levy)}원` : "없음(주말)"}
+- 사납금 ${levy > 0 ? `${won(levy)}원` : `없음 (주 ${levyPerWeek}일을 채운 뒤 더 나온 날이라 면제)`}
 - 실수령 ${won(total - levy)}원
 - 본인이 적은 지출: ${expense > 0 ? `${won(expense)}원` : "적지 않음"}
 - 본인이 적은 운행시간: ${minutes > 0 ? `${minutes}분` : "적지 않음"}
