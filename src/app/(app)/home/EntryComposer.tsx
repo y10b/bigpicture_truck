@@ -13,11 +13,27 @@ import {
 } from "@/components/ui";
 import MoneyInput from "@/components/MoneyInput";
 import { won } from "@/lib/format";
+import type { Withdrawal } from "@/lib/types";
+import WithdrawalTab from "./WithdrawalTab";
 
-type Mode = "single" | "bulk";
+type Mode = "single" | "bulk" | "withdraw";
 type Kind = "credit" | "cod";
 
-export default function EntryComposer({ workDate }: { workDate: string }) {
+export default function EntryComposer({
+  workDate,
+  withdrawals,
+  weekTotal,
+  weekWithdrawn,
+  remaining,
+  isLastWorkdayOfWeek,
+}: {
+  workDate: string;
+  withdrawals: Withdrawal[];
+  weekTotal: number;
+  weekWithdrawn: number;
+  remaining: number;
+  isLastWorkdayOfWeek: boolean;
+}) {
   const [mode, setMode] = useState<Mode>("single");
   const [kind, setKind] = useState<Kind>("credit");
   const [error, setError] = useState<string>();
@@ -85,11 +101,40 @@ export default function EntryComposer({ workDate }: { workDate: string }) {
           건별 입력
         </ModeTab>
         <ModeTab active={mode === "bulk"} onClick={() => switchMode("bulk")}>
-          하루치 한번에
+          하루 마감
+        </ModeTab>
+        <ModeTab active={mode === "withdraw"} onClick={() => switchMode("withdraw")}>
+          일주일 출금
         </ModeTab>
       </div>
 
+      {mode === "withdraw" && (
+        <WithdrawalTab
+          workDate={workDate}
+          withdrawals={withdrawals}
+          weekTotal={weekTotal}
+          weekWithdrawn={weekWithdrawn}
+          remaining={remaining}
+          isLastWorkdayOfWeek={isLastWorkdayOfWeek}
+        />
+      )}
+
+      {mode !== "withdraw" && (
       <form ref={formRef} action={submit} className="space-y-4 p-4" key={resetKey}>
+        {/* 두 방식이 같은 것이라는 걸 안 적어두면 뭘 골라야 하나 고민하게 됩니다 */}
+        <div className="rounded-xl bg-paper-2/70 px-3.5 py-3">
+          <p className="text-[13px] leading-relaxed text-ink-2">
+            <b>건별 입력</b>과 <b>하루 마감</b>은 적는 방법만 다르고{" "}
+            <b className="text-brand-600">결과는 똑같습니다.</b> 편한 쪽으로 쓰시면
+            됩니다.
+          </p>
+          <p className="mt-1.5 text-[12px] leading-relaxed text-ink-4">
+            {mode === "single"
+              ? "지금은 건별 입력 — 한 건 끝날 때마다 바로 적는 방식입니다."
+              : "지금은 하루 마감 — 일 다 끝내고 하루치를 한 번에 적는 방식입니다."}
+          </p>
+        </div>
+
         <RequiredLegend />
 
         {mode === "single" ? (
@@ -256,7 +301,7 @@ export default function EntryComposer({ workDate }: { workDate: string }) {
             ? "저장 중…"
             : mode === "single"
               ? "이 건 추가하기"
-              : "하루치 저장하기"}
+              : "하루 마감 저장하기"}
         </Button>
 
         {!canSubmit && (
@@ -267,6 +312,7 @@ export default function EntryComposer({ workDate }: { workDate: string }) {
           </p>
         )}
       </form>
+      )}
     </Card>
   );
 }
@@ -285,10 +331,12 @@ function ModeTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex-1 rounded-lg py-2.5 text-[14px] font-bold transition-colors",
+        "flex-1 rounded-lg py-2.5 text-[13px] font-bold whitespace-nowrap transition-colors",
+        // 지금 어느 탭에 있는지 글자색과 테두리로 바로 알 수 있게 합니다.
+        "border",
         active
-          ? "bg-card text-ink shadow-[0_1px_3px_rgba(20,22,26,0.10)]"
-          : "text-ink-4",
+          ? "border-brand-400 bg-card text-brand-600 shadow-[0_1px_3px_rgba(20,22,26,0.10)]"
+          : "border-transparent text-ink-4",
       )}
     >
       {children}

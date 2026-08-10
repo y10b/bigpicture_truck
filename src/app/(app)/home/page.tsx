@@ -9,7 +9,6 @@ import TotalsCard, { sumTotals } from "@/components/TotalsCard";
 import AiPanel from "./AiPanel";
 import EntryComposer from "./EntryComposer";
 import EntryList from "./EntryList";
-import WithdrawalPanel from "./WithdrawalPanel";
 
 export const metadata = { title: "정산 입력 · BIG PICTURE" };
 
@@ -95,7 +94,14 @@ export default async function HomePage({
 
       <TotalsCard label={`${prettyDate(workDate)} 정산`} totals={totals} />
 
-      <EntryComposer workDate={workDate} />
+      <EntryComposer
+        workDate={workDate}
+        withdrawals={allWithdrawals}
+        weekTotal={week.total}
+        weekWithdrawn={week.withdrawn}
+        remaining={week.remaining}
+        isLastWorkdayOfWeek={isLastWorkdayOfWeek}
+      />
 
       <section>
         <h2 className="mb-2 px-1 text-[14px] font-bold text-ink-2">
@@ -111,13 +117,6 @@ export default async function HomePage({
         hasEntries={entries.length > 0}
         initialCoach={cachedCoach}
         initialReport={cachedReport}
-      />
-
-      <WithdrawalPanel
-        workDate={workDate}
-        withdrawals={allWithdrawals.filter((w) => w.work_date === workDate)}
-        remaining={week.remaining}
-        isLastWorkdayOfWeek={isLastWorkdayOfWeek}
       />
     </div>
   );

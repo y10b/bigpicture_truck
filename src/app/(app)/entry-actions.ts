@@ -50,7 +50,7 @@ export async function addSingleEntry(formData: FormData): Promise<ActionResult> 
   return { ok: true };
 }
 
-/** 하루치 몰아서 저장 (건수 + 신용합계 + 착불합계 + 추가금합계) */
+/** 하루 마감 — 하루치를 몰아서 저장 (건수 + 신용합계 + 착불합계 + 추가금합계) */
 export async function addBulkEntry(formData: FormData): Promise<ActionResult> {
   const profile = await requireProfile();
   const supabase = await createClient();
