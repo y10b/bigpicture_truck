@@ -545,3 +545,171 @@ $$;
 grant execute on function public.admin_totals_by_user(date, date) to authenticated;
 
 notify pgrst, 'reload schema';
+-- ───────────────────────────────────────────────
+-- 12. entry_logs — 정산 내역 수정·삭제 이력
+--     화면 코드가 아니라 DB 트리거로 남깁니다.
+--     어느 경로로 고치든 빠짐없이 기록되게 하려는 것입니다.
+-- ───────────────────────────────────────────────
+create table if not exists public.entry_logs (
+  id         uuid primary key default gen_random_uuid(),
+  entry_id   uuid,                       -- 삭제된 뒤에도 이력은 남습니다
+  owner_id   uuid not null references public.profiles(id) on delete cascade,
+  editor_id  uuid references public.profiles(id) on delete set null,
+  action     text not null check (action in ('update', 'delete')),
+  before     jsonb not null,
+  after      jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists entry_logs_owner_idx on public.entry_logs (owner_id, created_at desc);
+create index if not exists entry_logs_entry_idx on public.entry_logs (entry_id, created_at desc);
+
+alter table public.entry_logs enable row level security;
+
+drop policy if exists entry_logs_own on public.entry_logs;
+create policy entry_logs_own on public.entry_logs for select
+  using (owner_id = auth.uid());
+
+drop policy if exists entry_logs_admin on public.entry_logs;
+create policy entry_logs_admin on public.entry_logs for select
+  using (public.is_admin());
+
+-- 이력은 트리거만 씁니다. 사람이 직접 넣거나 고치지 못하게 둡니다.
+
+create or replace function public.log_entry_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  snap_before jsonb;
+  snap_after  jsonb;
+begin
+  -- 비교할 값만 추립니다 (updated_at 같은 건 빼야 '안 바뀐 수정'이 안 남습니다)
+  snap_before := jsonb_build_object(
+    'work_date', old.work_date, 'mode', old.mode, 'count', old.count,
+    'credit', old.credit, 'cod', old.cod, 'extra', old.extra,
+    'expense', old.expense, 'minutes', old.minutes, 'memo', old.memo
+  );
+
+  if (tg_op = 'DELETE') then
+    insert into public.entry_logs (entry_id, owner_id, editor_id, action, before, after)
+    values (old.id, old.user_id, auth.uid(), 'delete', snap_before, null);
+    return old;
+  end if;
+
+  snap_after := jsonb_build_object(
+    'work_date', new.work_date, 'mode', new.mode, 'count', new.count,
+    'credit', new.credit, 'cod', new.cod, 'extra', new.extra,
+    'expense', new.expense, 'minutes', new.minutes, 'memo', new.memo
+  );
+
+  -- 실제로 달라진 게 없으면 이력을 남기지 않습니다
+  if snap_before = snap_after then
+    return new;
+  end if;
+
+  insert into public.entry_logs (entry_id, owner_id, editor_id, action, before, after)
+  values (new.id, new.user_id, auth.uid(), 'update', snap_before, snap_after);
+
+  return new;
+end $$;
+
+drop trigger if exists entries_log_update on public.entries;
+create trigger entries_log_update after update on public.entries
+  for each row execute function public.log_entry_change();
+
+drop trigger if exists entries_log_delete on public.entries;
+create trigger entries_log_delete after delete on public.entries
+  for each row execute function public.log_entry_change();
+
+notify pgrst, 'reload schema';
+-- 직원이 지난 내역을 고치지 못하게 DB 에서도 막습니다.
+-- 서버 코드만 믿으면, anon 키가 공개돼 있는 만큼 직접 호출로 우회할 수 있습니다.
+--
+-- 기준은 "오늘 적은 것" 입니다. 지난 날짜를 뒤늦게 입력하는 일이 있어서,
+-- 적은 날(created_at) 기준으로 잡아야 방금 적은 걸 바로 고칠 수 있습니다.
+
+drop policy if exists entries_own on public.entries;
+
+create policy entries_own_select on public.entries for select
+  using (user_id = auth.uid());
+
+create policy entries_own_insert on public.entries for insert
+  with check (user_id = auth.uid());
+
+create policy entries_own_update on public.entries for update
+  using (
+    user_id = auth.uid()
+    and (created_at at time zone 'Asia/Seoul')::date
+        = (now() at time zone 'Asia/Seoul')::date
+  )
+  with check (user_id = auth.uid());
+
+create policy entries_own_delete on public.entries for delete
+  using (
+    user_id = auth.uid()
+    and (created_at at time zone 'Asia/Seoul')::date
+        = (now() at time zone 'Asia/Seoul')::date
+  );
+
+-- 관리자는 기존 정책(entries_admin)으로 제한 없이 다룹니다.
+
+notify pgrst, 'reload schema';
+-- 계정을 지우면 profiles → entries 순으로 연쇄 삭제되는데,
+-- 그때 이 트리거가 이미 사라진 프로필을 가리키는 이력을 넣으려다 실패했습니다.
+-- (직원 삭제 기능이 통째로 막히는 문제)
+-- 계정 자체가 없어지는 중이면 남길 대상도 없으므로 그냥 넘어갑니다.
+
+alter table public.entry_logs
+  drop constraint if exists entry_logs_owner_id_fkey;
+
+alter table public.entry_logs
+  add constraint entry_logs_owner_id_fkey
+  foreign key (owner_id) references public.profiles(id) on delete cascade;
+
+create or replace function public.log_entry_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  snap_before jsonb;
+  snap_after  jsonb;
+begin
+  -- 계정이 통째로 지워지는 중이면 이력을 남기지 않습니다.
+  if not exists (select 1 from public.profiles where id = old.user_id) then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  snap_before := jsonb_build_object(
+    'work_date', old.work_date, 'mode', old.mode, 'count', old.count,
+    'credit', old.credit, 'cod', old.cod, 'extra', old.extra,
+    'expense', old.expense, 'minutes', old.minutes, 'memo', old.memo
+  );
+
+  if (tg_op = 'DELETE') then
+    insert into public.entry_logs (entry_id, owner_id, editor_id, action, before, after)
+    values (old.id, old.user_id, auth.uid(), 'delete', snap_before, null);
+    return old;
+  end if;
+
+  snap_after := jsonb_build_object(
+    'work_date', new.work_date, 'mode', new.mode, 'count', new.count,
+    'credit', new.credit, 'cod', new.cod, 'extra', new.extra,
+    'expense', new.expense, 'minutes', new.minutes, 'memo', new.memo
+  );
+
+  if snap_before = snap_after then
+    return new;
+  end if;
+
+  insert into public.entry_logs (entry_id, owner_id, editor_id, action, before, after)
+  values (new.id, new.user_id, auth.uid(), 'update', snap_before, snap_after);
+
+  return new;
+end $$;
+
+notify pgrst, 'reload schema';

@@ -2,7 +2,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { endOfWeek, prettyDate, startOfWeek, todayKST } from "@/lib/format";
 import { settleFromDaily } from "@/lib/settlement";
-import type { DayTotals, Entry, Withdrawal } from "@/lib/types";
+import type { DayTotals, Entry, EntryLog, Withdrawal } from "@/lib/types";
 import type { Coach, DailyReport } from "../ai-actions";
 import DateNav from "@/components/DateNav";
 import TotalsCard, { sumTotals } from "@/components/TotalsCard";
@@ -31,6 +31,8 @@ export default async function HomePage({
     { data: weekDaily },
     { data: weekWithdrawals },
     { data: aiRows },
+    { data: logRows },
+    { data: peopleRows },
   ] = await Promise.all([
       supabase
         .from("entries")
@@ -60,6 +62,15 @@ export default async function HomePage({
         .select("kind, content")
         .eq("user_id", profile.id)
         .eq("report_date", workDate),
+      // 이 날 내역의 수정 이력 (누가 언제 무엇을 고쳤는지)
+      supabase
+        .from("entry_logs")
+        .select("*")
+        .eq("owner_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      // 고친 사람 이름 (관리자가 고쳤을 수 있으므로 이름표가 필요합니다)
+      supabase.from("profiles").select("id, name"),
     ]);
 
   const cachedCoach =
@@ -69,6 +80,15 @@ export default async function HomePage({
     null;
 
   const entries = (entryData ?? []) as Entry[];
+  const entryIds = new Set(entries.map((e) => e.id));
+  const logs = ((logRows ?? []) as EntryLog[]).filter(
+    (l) => l.entry_id && entryIds.has(l.entry_id),
+  );
+  const editorNames = Object.fromEntries(
+    ((peopleRows ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]),
+  );
+  // 직원은 오늘 적은 것만 고칠 수 있습니다. 관리자는 제한 없이.
+  const isAdmin = profile.role === "admin";
   const totals = sumTotals(entries);
   const weekSeries = (weekDaily ?? []) as DayTotals[];
   const allWithdrawals = (weekWithdrawals ?? []) as Withdrawal[];
@@ -107,8 +127,14 @@ export default async function HomePage({
         <h2 className="mb-2 px-1 text-[14px] font-bold text-ink-2">
           입력한 내역{" "}
           <span className="tnum font-semibold text-ink-4">{entries.length}</span>
+
         </h2>
-        <EntryList entries={entries} />
+        <EntryList
+          entries={entries}
+          logs={logs}
+          isAdmin={isAdmin}
+          editorNames={editorNames}
+        />
       </section>
 
       <AiPanel

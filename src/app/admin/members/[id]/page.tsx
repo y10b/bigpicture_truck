@@ -3,12 +3,20 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { fillDailySeries, resolvePeriod } from "@/lib/period";
-import { endOfWeek, prettyDate, prettyPhone, startOfWeek, won } from "@/lib/format";
+import {
+  endOfWeek,
+  prettyDate,
+  prettyDateTime,
+  prettyPhone,
+  startOfWeek,
+  won,
+} from "@/lib/format";
 import { settleFromDaily } from "@/lib/settlement";
-import type { DayTotals, Entry, Profile, Withdrawal } from "@/lib/types";
+import type { DayTotals, Entry, EntryLog, Profile, Withdrawal } from "@/lib/types";
 import { Badge, Card, CardHeader, Empty } from "@/components/ui";
 import PeriodPicker from "@/components/PeriodPicker";
 import SettlementCard from "@/components/SettlementCard";
+import EntryAdminList from "./EntryAdminList";
 import TotalsCard, { sumTotals } from "@/components/TotalsCard";
 import { AmountChart, ChartLegend, CountChart } from "@/components/charts/SettlementChart";
 
@@ -30,6 +38,8 @@ export default async function MemberDetailPage({
     { data: dailyData },
     { data: entryData },
     { data: wdData },
+    { data: logRows },
+    { data: peopleRows },
   ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", id).maybeSingle(),
       // 합계·그래프는 날짜별로 합쳐진 뷰에서 (1000행 제한을 타지 않게)
@@ -58,6 +68,14 @@ export default async function MemberDetailPage({
         .gte("work_date", period.from)
         .lte("work_date", period.to)
         .order("work_date", { ascending: false }),
+      // 이 직원 내역의 수정 이력
+      supabase
+        .from("entry_logs")
+        .select("*")
+        .eq("owner_id", id)
+        .order("created_at", { ascending: false })
+        .limit(200),
+      supabase.from("profiles").select("id, name"),
     ]);
 
   if (!profileData) notFound();
@@ -68,6 +86,12 @@ export default async function MemberDetailPage({
   );
   const entries = (entryData ?? []) as Entry[];
   const withdrawals = (wdData ?? []) as Withdrawal[];
+  const logs = (logRows ?? []) as EntryLog[];
+  const editorNames = Object.fromEntries(
+    ((peopleRows ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]),
+  );
+  // 삭제된 항목은 목록에 안 남으므로 따로 모아 보여줍니다.
+  const deletedLogs = logs.filter((l) => l.action === "delete");
   const series = fillDailySeries(daily, period.from, period.to);
   const totals = sumTotals(daily);
   const workedDays = series.filter((d) => d.total > 0 || d.count > 0);
@@ -194,24 +218,55 @@ export default async function MemberDetailPage({
           </Card>
 
           <Card className="overflow-hidden">
-            <CardHeader title="입력 원본" desc="직원이 실제로 적은 내용 (최근 100건)" />
-            <ul className="divide-y divide-ink/6">
-              {entries.map((e) => (
-                <li key={e.id} className="flex items-start justify-between gap-3 px-4 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-bold">
-                      {prettyDate(e.work_date)}{" "}
-                      <span className="font-semibold text-ink-4">
-                        {e.mode === "bulk" ? `일괄 ${e.count}건` : e.credit > 0 ? "신용" : e.cod > 0 ? "착불" : "추가금"}
-                      </span>
-                    </p>
-                    {e.memo && <p className="mt-0.5 truncate text-[12px] text-ink-4">{e.memo}</p>}
-                  </div>
-                  <span className="tnum shrink-0 text-[13px] font-bold">{won(e.total)}</span>
-                </li>
-              ))}
-            </ul>
+            <CardHeader
+              title="입력 내역 · 수정"
+              desc="날짜를 눌러 펼친 뒤 금액·건수·결제구분을 바로잡을 수 있습니다"
+            />
+            <EntryAdminList
+              entries={entries}
+              logs={logs}
+              editorNames={editorNames}
+            />
           </Card>
+
+          {deletedLogs.length > 0 && (
+            <Card className="overflow-hidden">
+              <CardHeader
+                title="삭제된 내역"
+                desc={`${deletedLogs.length}건 · 지워진 기록도 남겨둡니다`}
+              />
+              <ul className="divide-y divide-ink/6">
+                {deletedLogs.slice(0, 30).map((l) => {
+                  const b = (l.before ?? {}) as Record<string, unknown>;
+                  const amount =
+                    Number(b.credit ?? 0) + Number(b.cod ?? 0) + Number(b.extra ?? 0);
+                  return (
+                    <li key={l.id} className="px-4 py-3">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <p className="text-[13px] font-bold">
+                          {prettyDate(String(b.work_date))}
+                          <span className="ml-1.5 font-semibold text-ink-4">
+                            {Number(b.credit ?? 0) > 0 ? "신용" : "착불"}
+                          </span>
+                        </p>
+                        <span className="tnum text-[13px] font-bold text-ink-3 line-through">
+                          {won(amount)}원
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[12px] text-ink-4">
+                        {prettyDateTime(l.created_at)} ·{" "}
+                        {l.editor_id
+                          ? (editorNames[l.editor_id] ?? "알 수 없음")
+                          : "알 수 없음"}{" "}
+                        삭제
+                        {b.memo ? ` · ${b.memo}` : ""}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          )}
         </>
       )}
     </div>

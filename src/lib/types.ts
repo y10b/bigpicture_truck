@@ -49,6 +49,18 @@ export type DailyTotal = {
   total: number;
 };
 
+export type EntryLog = {
+  id: string;
+  entry_id: string | null;
+  owner_id: string;
+  /** 고친 사람. 계정이 지워졌으면 null */
+  editor_id: string | null;
+  action: "update" | "delete";
+  before: unknown;
+  after: unknown;
+  created_at: string;
+};
+
 export type Notice = {
   id: string;
   title: string;
