@@ -72,19 +72,8 @@ export type UserTotals = {
   total: number;
   /** 근무일수 */
   days: number;
-  /** 그중 사납금이 붙는 날 수 (주당 앞 5일) */
-  levy_days: number;
   /** 기간 내 출금 합계 */
   withdrawn: number;
-};
-
-export type AppSettings = {
-  id: number;
-  /** 사납금 1일 단가 */
-  levy_amount: number;
-  /** 한 주에 사납금이 붙는 최대 근무일수 (기본 5) */
-  levy_days_per_week: number;
-  updated_at: string;
 };
 
 export type Withdrawal = {

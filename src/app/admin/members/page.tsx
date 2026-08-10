@@ -1,12 +1,11 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { startOfMonth, todayKST } from "@/lib/format";
-import { DEFAULT_LEVY_AMOUNT, settleFromUserTotals } from "@/lib/settlement";
+import { settleFromUserTotals } from "@/lib/settlement";
 import type { Profile, UserTotals } from "@/lib/types";
 import { Card, Empty } from "@/components/ui";
-import LevySettings from "./LevySettings";
-import MemberCard from "./MemberCard";
 import MemberCreateForm from "./MemberCreateForm";
+import MembersView from "./MembersView";
 
 export const metadata = { title: "직원 관리 · BIG PICTURE" };
 
@@ -15,8 +14,7 @@ export default async function MembersPage() {
   const today = todayKST();
 
   const supabase = await createClient();
-  const [{ data: profileData }, { data: totalsData }, { data: settings }] =
-    await Promise.all([
+  const [{ data: profileData }, { data: totalsData }] = await Promise.all([
       supabase
         .from("profiles")
         .select("*")
@@ -27,17 +25,13 @@ export default async function MembersPage() {
         from_date: startOfMonth(today),
         to_date: today,
       }),
-      supabase.from("app_settings").select("levy_amount, levy_days_per_week").eq("id", 1).maybeSingle(),
-    ]);
+  ]);
 
   const profiles = (profileData ?? []) as Profile[];
-  const levyRate = settings?.levy_amount ?? DEFAULT_LEVY_AMOUNT;
-  const levyDays = settings?.levy_days_per_week ?? 5;
-
   const stats = new Map(
     ((totalsData ?? []) as UserTotals[]).map((r) => [
       r.user_id,
-      settleFromUserTotals(r, levyRate),
+      settleFromUserTotals(r),
     ]),
   );
 
@@ -50,8 +44,6 @@ export default async function MembersPage() {
         </span>
       </div>
 
-      <LevySettings amount={levyRate} daysPerWeek={levyDays} />
-
       <MemberCreateForm />
 
       {profiles.length === 0 ? (
@@ -59,17 +51,11 @@ export default async function MembersPage() {
           <Empty icon="👷" title="등록된 직원이 없습니다" desc="위 버튼으로 계정을 만들어 주세요." />
         </Card>
       ) : (
-        <ul className="space-y-2.5">
-          {profiles.map((p) => (
-            <li key={p.id}>
-              <MemberCard
-                profile={p}
-                stat={stats.get(p.id)}
-                isMe={p.id === me.id}
-              />
-            </li>
-          ))}
-        </ul>
+        <MembersView
+          profiles={profiles}
+          stats={Object.fromEntries(stats)}
+          meId={me.id}
+        />
       )}
 
       <p className="px-1 pt-1 text-[12px] leading-relaxed text-ink-4">

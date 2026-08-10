@@ -50,10 +50,14 @@ const api = async (p, init = {}) => {
 
 /* ── 샘플 직원 ───────────────────────────────────────── */
 const SAMPLES = [
-  { name: "김성호", phone: "01090000001", memo: "12가3456 / 1톤", temp: false },
-  { name: "박준영", phone: "01090000002", memo: "34나7890 / 1.4톤", temp: false },
-  // 이 분은 임시 비밀번호 상태 그대로 둡니다 (강제 변경 화면 확인용)
-  { name: "이태우", phone: "01090000003", memo: "56다1234 / 2.5톤", temp: true },
+  { name: "김성호", phone: "01090000001", vehicle_no: "12가3456", vehicle_type: "1톤", bank_account: "국민 123456-01-234567", temp: false },
+  { name: "박준영", phone: "01090000002", vehicle_no: "34나7890", vehicle_type: "1.4톤", bank_account: "신한 110-234-567890", temp: false },
+  { name: "이태우", phone: "01090000003", vehicle_no: "56다1234", vehicle_type: "2.5톤", bank_account: "농협 302-1234-5678-91", temp: true },
+  { name: "정민수", phone: "01090000004", vehicle_no: "78라5678", vehicle_type: "1톤 냉장", bank_account: "국민 987654-02-345678", temp: false },
+  { name: "최영근", phone: "01090000005", vehicle_no: "90마9012", vehicle_type: "1톤", bank_account: "우리 1002-345-678901", temp: false },
+  { name: "한동철", phone: "01090000006", vehicle_no: "11바3344", vehicle_type: "2.5톤", bank_account: "하나 123-456789-01234", temp: false },
+  // 차종을 아직 안 적은 사람 — '차종 미등록' 필터 확인용
+  { name: "오세진", phone: "01090000007", vehicle_no: null, vehicle_type: null, bank_account: null, temp: false },
 ];
 const SAMPLE_PASSWORD = "bp111111";
 
@@ -94,12 +98,9 @@ const startOfWeek = (date) => {
   return addDays(date, -(day === 0 ? 6 : day - 1));
 };
 
-/** 평일(월~금)이면 상납금 대상 */
-const isLevyDay = (date) => {
-  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
-  return day >= 1 && day <= 5;
-};
-const WEEKDAY_LEVY = 100_000;
+// 사납금: 그 주에 일한 날을 날짜순으로 세어 앞 5일까지만 부과합니다.
+const LEVY_AMOUNT = 100_000;
+const LEVY_DAYS_PER_WEEK = 5;
 
 /* ── 무작위 ──────────────────────────────────────────── */
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -196,7 +197,9 @@ async function seed() {
         name: s.name,
         phone: s.phone,
         role: "employee",
-        memo: s.memo,
+        vehicle_no: s.vehicle_no,
+        vehicle_type: s.vehicle_type,
+        bank_account: s.bank_account,
         must_change_password: s.temp,
       }),
     });
@@ -216,8 +219,9 @@ async function seed() {
       allRows.push(...rows);
 
       const wk = startOfWeek(date);
-      const acc = byWeek.get(wk) ?? { net: 0, lastDay: date };
-      acc.net += dayTotal - (isLevyDay(date) ? WEEKDAY_LEVY : 0);
+      const acc = byWeek.get(wk) ?? { gross: 0, workedDays: 0, lastDay: date };
+      acc.gross += dayTotal;
+      acc.workedDays += 1;
       acc.lastDay = date;
       byWeek.set(wk, acc);
     }
@@ -228,7 +232,9 @@ async function seed() {
     for (const [wk, acc] of byWeek) {
       if (wk === thisWeek) continue;
       // 실제로는 딱 떨어지게 안 찾아가므로 만원 단위로 조금 남깁니다.
-      const amount = Math.floor((acc.net * rand(88, 100)) / 100 / 10000) * 10000;
+      const levy = Math.min(acc.workedDays, LEVY_DAYS_PER_WEEK) * LEVY_AMOUNT;
+      const net = acc.gross - levy;
+      const amount = Math.floor((net * rand(88, 100)) / 100 / 10000) * 10000;
       if (amount <= 0) continue;
       withdrawnSum += amount;
       allWithdrawals.push({
@@ -266,7 +272,7 @@ async function seed() {
   console.log(`\n\n${"─".repeat(52)}
  샘플 데이터 완료
 
-   직원 3명 · 최근 ${DAYS}일 · 정산 ${allRows.length}건
+   직원 ${SAMPLES.length}명 · 최근 ${DAYS}일 · 정산 ${allRows.length}건
    샘플 로그인 비밀번호: ${SAMPLE_PASSWORD}
 
    ${SAMPLES.map((s) => `${s.name}  ${s.phone.replace(/(...)(....)(....)/, "$1-$2-$3")}${s.temp ? "  ← 임시 비번 상태" : ""}`).join("\n   ")}

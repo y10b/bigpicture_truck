@@ -485,3 +485,63 @@ update public.profiles
  where vehicle_no is null and memo is not null and memo <> '';
 
 notify pgrst, 'reload schema';
+
+-- ═══════════════════════════════════════════════════════════════
+--  사납금 제거 (2026-08)
+--  기사들에게 압박이 된다는 판단으로 앱에서 사납금 개념을 뺐습니다.
+--  정산은 매출 - 출금 = 미출금 으로만 봅니다.
+-- ═══════════════════════════════════════════════════════════════
+alter table public.app_settings
+  drop column if exists weekday_levy,
+  drop column if exists levy_amount,
+  drop column if exists levy_days_per_week;
+
+drop function if exists public.admin_totals_by_user(date, date);
+create function public.admin_totals_by_user(from_date date, to_date date)
+returns table (
+  user_id   uuid,
+  name      text,
+  phone     text,
+  count     int,
+  credit    int,
+  cod       int,
+  extra     int,
+  total     int,
+  days      int,
+  withdrawn int
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    p.id, p.name, p.phone,
+    coalesce(e.cnt, 0)::int,
+    coalesce(e.credit, 0)::int,
+    coalesce(e.cod, 0)::int,
+    coalesce(e.extra, 0)::int,
+    coalesce(e.total, 0)::int,
+    coalesce(e.days, 0)::int,
+    coalesce(w.withdrawn, 0)::int
+  from public.profiles p
+  left join lateral (
+    select
+      sum(en.count) as cnt, sum(en.credit) as credit, sum(en.cod) as cod,
+      sum(en.extra) as extra, sum(en.total) as total,
+      count(distinct en.work_date) as days
+    from public.entries en
+    where en.user_id = p.id and en.work_date between from_date and to_date
+  ) e on true
+  left join lateral (
+    select sum(wd.amount) as withdrawn
+    from public.withdrawals wd
+    where wd.user_id = p.id and wd.work_date between from_date and to_date
+  ) w on true
+  where public.is_admin()
+  order by 8 desc, p.name;
+$$;
+
+grant execute on function public.admin_totals_by_user(date, date) to authenticated;
+
+notify pgrst, 'reload schema';

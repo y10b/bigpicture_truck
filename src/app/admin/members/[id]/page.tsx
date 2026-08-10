@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { fillDailySeries, resolvePeriod } from "@/lib/period";
 import { endOfWeek, prettyDate, prettyPhone, startOfWeek, won } from "@/lib/format";
-import { DEFAULT_LEVY_AMOUNT, settleFromDaily } from "@/lib/settlement";
+import { settleFromDaily } from "@/lib/settlement";
 import type { DayTotals, Entry, Profile, Withdrawal } from "@/lib/types";
 import { Badge, Card, CardHeader, Empty } from "@/components/ui";
 import PeriodPicker from "@/components/PeriodPicker";
@@ -30,7 +30,6 @@ export default async function MemberDetailPage({
     { data: dailyData },
     { data: entryData },
     { data: wdData },
-    { data: settings },
   ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", id).maybeSingle(),
       // 합계·그래프는 날짜별로 합쳐진 뷰에서 (1000행 제한을 타지 않게)
@@ -59,7 +58,6 @@ export default async function MemberDetailPage({
         .gte("work_date", period.from)
         .lte("work_date", period.to)
         .order("work_date", { ascending: false }),
-      supabase.from("app_settings").select("levy_amount, levy_days_per_week").eq("id", 1).maybeSingle(),
     ]);
 
   if (!profileData) notFound();
@@ -70,20 +68,11 @@ export default async function MemberDetailPage({
   );
   const entries = (entryData ?? []) as Entry[];
   const withdrawals = (wdData ?? []) as Withdrawal[];
-  const levyRate = settings?.levy_amount ?? DEFAULT_LEVY_AMOUNT;
-  const levyPerWeek = settings?.levy_days_per_week ?? 5;
-
   const series = fillDailySeries(daily, period.from, period.to);
   const totals = sumTotals(daily);
   const workedDays = series.filter((d) => d.total > 0 || d.count > 0);
   const withdrawn = withdrawals.reduce((a, w) => a + w.amount, 0);
-  const settlement = settleFromDaily(
-    series,
-    levyRate,
-    withdrawn,
-    fullWeeks,
-    levyPerWeek,
-  );
+  const settlement = settleFromDaily(series, withdrawn);
 
   return (
     <div className="space-y-4 rise">
@@ -118,14 +107,9 @@ export default async function MemberDetailPage({
         to={period.to}
       />
 
-      <SettlementCard
-        label={`${period.label} 실수령`}
-        s={settlement}
-        levyRate={levyRate}
-        levyDaysPerWeek={levyPerWeek}
-      />
+      <SettlementCard label={`${period.label} 매출`} s={settlement} />
 
-      <TotalsCard label={`${period.label} 매출 구성`} totals={totals} />
+      <TotalsCard label={`${period.label} 구성`} totals={totals} />
 
       {totals.count === 0 && totals.total === 0 ? (
         <Card>

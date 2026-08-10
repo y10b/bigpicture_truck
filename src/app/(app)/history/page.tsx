@@ -3,9 +3,9 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { fillDailySeries, resolvePeriod } from "@/lib/period";
 import { endOfWeek, prettyDate, startOfWeek, won } from "@/lib/format";
-import { DEFAULT_LEVY_AMOUNT, levyDates, settleFromDaily } from "@/lib/settlement";
+import { settleFromDaily } from "@/lib/settlement";
 import type { DayTotals, Withdrawal } from "@/lib/types";
-import { Badge, Card, CardHeader, Empty } from "@/components/ui";
+import { Card, CardHeader, Empty } from "@/components/ui";
 import PeriodPicker from "@/components/PeriodPicker";
 import SettlementCard from "@/components/SettlementCard";
 import TotalsCard, { sumTotals } from "@/components/TotalsCard";
@@ -25,7 +25,7 @@ export default async function HistoryPage({
   const supabase = await createClient();
   // 원본 entries 가 아니라 날짜별로 이미 합쳐진 뷰를 읽습니다.
   // (PostgREST 가 1000행까지만 주기 때문에 원본을 통째로 가져오면 합계가 틀어집니다)
-  const [{ data }, { data: wdData }, { data: settings }] = await Promise.all([
+  const [{ data }, { data: wdData }] = await Promise.all([
     // 사납금은 "그 주에 일한 앞 N일"에 붙으므로, 기간이 주 중간에서 잘려도
     // 순번이 맞도록 주 단위로 넓혀서 읽습니다.
     supabase
@@ -42,7 +42,6 @@ export default async function HistoryPage({
       .gte("work_date", period.from)
       .lte("work_date", period.to)
       .order("work_date", { ascending: false }),
-    supabase.from("app_settings").select("levy_amount, levy_days_per_week").eq("id", 1).maybeSingle(),
   ]);
 
   const fullWeeks = (data ?? []) as DayTotals[];
@@ -50,21 +49,11 @@ export default async function HistoryPage({
     (d) => d.work_date >= period.from && d.work_date <= period.to,
   );
   const withdrawals = (wdData ?? []) as Withdrawal[];
-  const levyRate = settings?.levy_amount ?? DEFAULT_LEVY_AMOUNT;
-  const levyPerWeek = settings?.levy_days_per_week ?? 5;
-
   const series = fillDailySeries(daily, period.from, period.to);
   const totals = sumTotals(daily);
   const workedDays = series.filter((d) => d.total > 0 || d.count > 0);
   const withdrawn = withdrawals.reduce((a, w) => a + w.amount, 0);
-  const settlement = settleFromDaily(
-    series,
-    levyRate,
-    withdrawn,
-    fullWeeks,
-    levyPerWeek,
-  );
-  const charged = levyDates(fullWeeks, levyPerWeek);
+  const settlement = settleFromDaily(series, withdrawn);
   const avgPerDay = workedDays.length
     ? Math.round(totals.total / workedDays.length)
     : 0;
@@ -80,14 +69,9 @@ export default async function HistoryPage({
         to={period.to}
       />
 
-      <SettlementCard
-        label={`${period.label} 실수령`}
-        s={settlement}
-        levyRate={levyRate}
-        levyDaysPerWeek={levyPerWeek}
-      />
+      <SettlementCard label={`${period.label} 매출`} s={settlement} />
 
-      <TotalsCard label={`${period.label} 매출 구성`} totals={totals} />
+      <TotalsCard label={`${period.label} 구성`} totals={totals} />
 
       <div className="grid grid-cols-2 gap-3">
         <MiniStat label="일한 날" value={`${workedDays.length}일`} />
@@ -137,9 +121,6 @@ export default async function HistoryPage({
                     <div className="min-w-0">
                       <p className="flex items-center gap-1.5 text-[14px] font-bold">
                         {prettyDate(d.work_date)}
-                        {!charged.has(d.work_date) && (
-                          <Badge tone="brand">사납금 면제</Badge>
-                        )}
                       </p>
                       <p className="tnum mt-0.5 text-[12px] text-ink-4">
                         {d.count}건 · 신용 {won(d.credit)} · 착불 {won(d.cod)}

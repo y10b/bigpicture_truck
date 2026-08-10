@@ -39,7 +39,14 @@ export default function MemberCard({
   };
 
   return (
-    <Card className={cn("overflow-hidden", !profile.active && "opacity-70")}>
+    <Card
+      className={cn(
+        "overflow-hidden",
+        !profile.active && "opacity-70",
+        // 목록에서 내 계정을 한눈에 찾을 수 있게 테두리를 살립니다.
+        isMe && "border-brand-400 ring-1 ring-brand-400/30",
+      )}
+    >
       <div className="flex items-start gap-3 p-4">
         <Link
           href={`/admin/members/${profile.id}`}
@@ -54,6 +61,7 @@ export default function MemberCard({
         <Link href={`/admin/members/${profile.id}`} className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[15px] font-extrabold">{profile.name}</span>
+            {isMe && <Badge tone="accent">나</Badge>}
             {profile.role === "admin" && <Badge tone="brand">관리자</Badge>}
             {!profile.active && <Badge tone="danger">비활성</Badge>}
             {profile.must_change_password && <Badge tone="accent">임시 비번</Badge>}
@@ -76,19 +84,15 @@ export default function MemberCard({
           )}
           {stat && stat.total > 0 ? (
             <div className="mt-1.5 space-y-0.5">
-              <p className="tnum text-[12px] font-semibold text-ink-2">
-                이번 달 매출 {won(stat.total)}원
-                <span className="font-normal text-ink-4">
-                  {" "}
-                  · 사납 {won(stat.levy)}
-                </span>
-              </p>
-              <p className="tnum text-[12px] font-bold text-brand-600">
-                실수령 {won(stat.net)}원
+              <p className="tnum text-[12px] font-bold text-ink-2">
+                이번 달 {won(stat.total)}원
                 <span className="font-semibold text-ink-4">
                   {" "}
-                  · 출금 {won(stat.withdrawn)}
+                  · {stat.workedDays}일 근무
                 </span>
+              </p>
+              <p className="tnum text-[12px] font-semibold text-ink-3">
+                출금 {won(stat.withdrawn)}원
               </p>
               <p
                 className={cn(

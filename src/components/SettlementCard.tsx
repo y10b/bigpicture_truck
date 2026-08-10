@@ -3,67 +3,48 @@ import { Card, cn } from "@/components/ui";
 import type { Settlement } from "@/lib/settlement";
 
 /**
- * 매출에서 사납금을 빼 실제로 손에 쥐는 금액을 보여줍니다.
- * 출금 기록이 있는 화면에서는 남은 금액까지 이어서 보여줍니다.
+ * 기간 매출과 출금 상황을 보여줍니다.
+ * 벌어들인 금액 → 찾아간 금액 → 아직 안 찾은 금액 순으로 읽히게 했습니다.
  */
 export default function SettlementCard({
   label,
   s,
-  levyRate,
-  levyDaysPerWeek = 5,
   showWithdraw = true,
   className,
 }: {
   label: string;
   s: Settlement;
-  levyRate: number;
-  levyDaysPerWeek?: number;
   showWithdraw?: boolean;
   className?: string;
 }) {
   return (
     <Card className={cn("overflow-hidden", className)}>
       <div className="bg-ink px-4 py-4 text-paper">
-        <span className="text-[12px] font-semibold text-paper/60">{label}</span>
+        <div className="flex items-baseline justify-between">
+          <span className="text-[12px] font-semibold text-paper/60">{label}</span>
+          <span className="text-[12px] font-semibold text-paper/60">
+            근무 <span className="tnum text-accent">{s.workedDays}</span>일
+          </span>
+        </div>
         <div className="mt-1 flex items-baseline gap-1">
           <span className="tnum text-[32px] leading-none font-extrabold tracking-tight">
-            {won(s.net)}
+            {won(s.total)}
           </span>
           <span className="text-[15px] font-semibold text-paper/60">원</span>
         </div>
-        <p className="mt-1 text-[12px] font-medium text-paper/50">
-          실수령 · 사납금 뺀 금액
-        </p>
       </div>
 
-      <div className="divide-y divide-ink/6">
-        <Row label="매출 합계" value={s.total} sub={`근무 ${s.workedDays}일`} />
-        <Row
-          label="사납금"
-          value={-s.levy}
-          sub={
-            s.freeDays > 0
-              ? `${s.levyDays}일 × ${won(levyRate)}원 · ${s.freeDays}일은 면제 (주 ${levyDaysPerWeek}일 채운 뒤 근무)`
-              : `${s.levyDays}일 × ${won(levyRate)}원`
-          }
-          tone="minus"
-        />
-        {showWithdraw && (
-          <>
-            <Row label="출금한 금액" value={-s.withdrawn} tone="minus" />
-            <Row
-              label="아직 안 찾은 금액"
-              value={s.remaining}
-              tone={s.remaining < 0 ? "warn" : "strong"}
-              sub={
-                s.remaining < 0
-                  ? "실수령보다 많이 출금했습니다"
-                  : undefined
-              }
-            />
-          </>
-        )}
-      </div>
+      {showWithdraw && (
+        <div className="divide-y divide-ink/6">
+          <Row label="출금한 금액" value={-s.withdrawn} tone="minus" />
+          <Row
+            label="아직 안 찾은 금액"
+            value={s.remaining}
+            tone={s.remaining < 0 ? "warn" : "strong"}
+            sub={s.remaining < 0 ? "번 금액보다 많이 출금했습니다" : undefined}
+          />
+        </div>
+      )}
     </Card>
   );
 }

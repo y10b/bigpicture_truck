@@ -3,9 +3,10 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { fillDailySeries, resolvePeriod } from "@/lib/period";
 import { prettyDate, todayKST, won } from "@/lib/format";
-import { DEFAULT_LEVY_AMOUNT, settleFromUserTotals } from "@/lib/settlement";
+import { settleFromUserTotals } from "@/lib/settlement";
 import type { DayTotals, Profile, UserTotals } from "@/lib/types";
-import { Badge, Card, CardHeader, Empty } from "@/components/ui";
+import { Card, CardHeader, Empty } from "@/components/ui";
+import RankingView from "./RankingView";
 import PeriodPicker from "@/components/PeriodPicker";
 import TotalsCard, { sumTotals, type Totals } from "@/components/TotalsCard";
 import { AmountChart, ChartLegend, CountChart } from "@/components/charts/SettlementChart";
@@ -32,7 +33,6 @@ export default async function AdminDashboard({
     { data: userData },
     { data: todayData },
     { data: profileData },
-    { data: settings },
   ] = await Promise.all([
     // 일자별 전사 합계 — 기간 길이만큼(최대 366행)
     supabase.rpc("admin_totals_by_day", {
@@ -50,27 +50,29 @@ export default async function AdminDashboard({
       .select("user_id, count, credit, cod, extra, total")
       .eq("work_date", today),
     // 직원 표는 작으므로 그대로 읽어 뱃지(관리자/비활성)에 씁니다.
-    supabase.from("profiles").select("id, role, active"),
-    supabase.from("app_settings").select("levy_amount, levy_days_per_week").eq("id", 1).maybeSingle(),
+    supabase.from("profiles").select("id, role, active, vehicle_no, vehicle_type"),
   ]);
 
   const daily = (dayData ?? []) as DayTotals[];
   const todayRows = (todayData ?? []) as (Totals & { user_id: string })[];
-  const profiles = (profileData ?? []) as Pick<Profile, "id" | "role" | "active">[];
+  const profiles = (profileData ?? []) as Pick<
+    Profile,
+    "id" | "role" | "active" | "vehicle_no" | "vehicle_type"
+  >[];
   const metaOf = new Map(profiles.map((p) => [p.id, p]));
-
-  const levyRate = settings?.levy_amount ?? DEFAULT_LEVY_AMOUNT;
 
   const ranking = ((userData ?? []) as UserTotals[]).map((r) => ({
     ...r,
     role: metaOf.get(r.user_id)?.role ?? "employee",
     active: metaOf.get(r.user_id)?.active ?? true,
-    s: settleFromUserTotals(r, levyRate),
+    vehicle_no: metaOf.get(r.user_id)?.vehicle_no ?? null,
+    vehicle_type: metaOf.get(r.user_id)?.vehicle_type ?? null,
+    s: settleFromUserTotals(r),
   }));
 
   // 회사 전체로 아직 안 나간 돈
   const totalRemaining = ranking.reduce((a, r) => a + r.s.remaining, 0);
-  const totalLevy = ranking.reduce((a, r) => a + r.s.levy, 0);
+  const totalWithdrawn = ranking.reduce((a, r) => a + r.s.withdrawn, 0);
 
   const series = fillDailySeries(daily, period.from, period.to);
   const totals = sumTotals(daily);
@@ -147,9 +149,9 @@ export default async function AdminDashboard({
 
       <div className="grid grid-cols-2 gap-3">
         <Card className="px-4 py-3">
-          <p className="text-[12px] font-semibold text-ink-4">사납금 합계</p>
+          <p className="text-[12px] font-semibold text-ink-4">출금 합계</p>
           <p className="tnum mt-0.5 text-[17px] font-extrabold">
-            {won(totalLevy)}원
+            {won(totalWithdrawn)}원
           </p>
         </Card>
         <Card className="px-4 py-3">
@@ -189,60 +191,12 @@ export default async function AdminDashboard({
             </div>
           </Card>
 
-          <Card className="overflow-hidden">
-            <CardHeader
-              title="직원별 실적"
-              desc={`${prettyDate(period.from)} ~ ${prettyDate(period.to)} · 금액은 실수령`}
-            />
-            <ul className="divide-y divide-ink/6">
-              {ranking.map((r, i) => (
-                <li key={r.user_id}>
-                  <Link
-                    href={`/admin/members/${r.user_id}?${periodQuery}`}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors active:bg-paper-2"
-                  >
-                    <span className="tnum w-5 shrink-0 text-[13px] font-extrabold text-ink-4">
-                      {i + 1}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <p className="truncate text-[14px] font-bold">{r.name}</p>
-                        {r.role === "admin" && <Badge tone="brand">관리자</Badge>}
-                        {!r.active && <Badge>비활성</Badge>}
-                      </div>
-                      <p className="tnum mt-0.5 text-[12px] text-ink-4">
-                        {r.count}건 · {r.days}일 (사납 {r.levy_days}) ·{" "}
-                        {won(r.s.levy)}
-                      </p>
-                      <p className="tnum mt-0.5 text-[12px] font-semibold text-ink-3">
-                        출금 {won(r.s.withdrawn)} · 미출금{" "}
-                        <span
-                          className={
-                            r.s.remaining < 0 ? "font-bold text-danger" : "font-bold"
-                          }
-                        >
-                          {r.s.remaining < 0
-                            ? `−${won(-r.s.remaining)}`
-                            : won(r.s.remaining)}
-                        </span>
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <span className="tnum text-[15px] font-extrabold text-brand-600">
-                        {won(r.s.net)}
-                        <span className="ml-0.5 text-[11px] font-semibold text-ink-4">
-                          원
-                        </span>
-                      </span>
-                      <p className="tnum text-[11px] text-ink-4">
-                        매출 {won(r.total)}
-                      </p>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </Card>
+          <RankingView
+            rows={ranking}
+            desc={`${prettyDate(period.from)} ~ ${prettyDate(period.to)}`}
+            periodQuery={periodQuery}
+            meId={me.id}
+          />
         </>
       )}
     </div>
