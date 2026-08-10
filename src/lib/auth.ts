@@ -1,9 +1,16 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
-/** 로그인된 사용자의 프로필. 없으면 null. */
-export async function getProfile(): Promise<Profile | null> {
+/**
+ * 로그인된 사용자의 프로필. 없으면 null.
+ *
+ * 한 번의 요청 안에서 레이아웃과 페이지가 각각 부르기 때문에 React cache 로
+ * 감쌌습니다. 이게 없으면 화면 하나 그릴 때 세션 확인과 프로필 조회가
+ * 두 번씩 나가고, 그만큼 응답이 느려집니다.
+ */
+export const getProfile = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -17,7 +24,7 @@ export async function getProfile(): Promise<Profile | null> {
     .maybeSingle();
 
   return (data as Profile) ?? null;
-}
+});
 
 /** 로그인 필수. 비활성 계정이면 로그아웃 처리. */
 export async function requireProfile(): Promise<Profile> {

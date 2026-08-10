@@ -53,8 +53,22 @@ html,
 body {
   background: var(--color-paper);
   color: var(--color-ink);
-  -webkit-tap-highlight-color: transparent;
+  /* 완전 투명하게 두면 iOS 에서 눌러도 아무 반응이 없어 "먹통"처럼 느껴집니다.
+     아주 옅게라도 남겨서 손끝에 즉시 반응이 오게 합니다. */
+  -webkit-tap-highlight-color: rgba(20, 22, 26, 0.07);
   -webkit-text-size-adjust: 100%;
+}
+
+/* 누를 수 있는 것들은 더블탭 확대 대기(약 300ms)를 없애고,
+   iOS 에서 :active 가 실제로 걸리도록 합니다. */
+button,
+a,
+label,
+[role="checkbox"],
+select,
+summary {
+  touch-action: manipulation;
+  cursor: pointer;
 }
 
 body {
@@ -116,6 +130,15 @@ input[type="number"] {
     background: #d5d3c9;
     border-radius: 99px;
     border: 3px solid var(--color-paper);
+  }
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
   }
 }
 

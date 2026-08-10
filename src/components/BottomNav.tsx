@@ -1,8 +1,22 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/components/ui";
+
+/**
+ * 탭을 누른 뒤 화면이 올 때까지 걸리는 시간을 눈에 보이게 합니다.
+ * 이게 없으면 눌렀는데 아무 일도 안 일어나는 것처럼 느껴집니다.
+ */
+function TabPending() {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+  return (
+    <span className="absolute inset-x-0 -top-1.5 h-1 overflow-hidden rounded-full bg-brand-200">
+      <span className="block h-full w-1/2 animate-[slide_0.8s_ease-in-out_infinite] rounded-full bg-brand-500" />
+    </span>
+  );
+}
 
 export type NavItem = {
   href: string;
@@ -28,11 +42,14 @@ export default function BottomNav({ items }: { items: NavItem[] }) {
             <li key={item.href} className="flex-1">
               <Link
                 href={item.href}
+                prefetch
                 className={cn(
-                  "relative flex flex-col items-center gap-0.5 py-1 transition-colors",
+                  "relative flex flex-col items-center gap-0.5 py-1 transition-all",
+                  "active:scale-95 active:opacity-60",
                   active ? "text-brand-600" : "text-ink-4",
                 )}
               >
+                <TabPending />
                 <span className="relative">
                   {item.icon}
                   {Boolean(item.badge) && (

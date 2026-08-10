@@ -27,8 +27,12 @@ export default async function HomePage({
   const weekTo = endOfWeek(workDate);
 
   const supabase = await createClient();
-  const [{ data: entryData }, { data: weekDaily }, { data: weekWithdrawals }] =
-    await Promise.all([
+  const [
+    { data: entryData },
+    { data: weekDaily },
+    { data: weekWithdrawals },
+    { data: aiRows },
+  ] = await Promise.all([
       supabase
         .from("entries")
         .select("*")
@@ -50,14 +54,14 @@ export default async function HomePage({
         .gte("work_date", weekFrom)
         .lte("work_date", weekTo)
         .order("created_at", { ascending: false }),
+      // 이미 만들어 둔 AI 결과가 있으면 바로 보여줍니다 (없으면 버튼만).
+      // 위 조회들과 함께 보내야 왕복이 한 번으로 끝납니다.
+      supabase
+        .from("ai_reports")
+        .select("kind, content")
+        .eq("user_id", profile.id)
+        .eq("report_date", workDate),
     ]);
-
-  // 이미 만들어 둔 AI 결과가 있으면 바로 보여줍니다 (없으면 버튼만).
-  const { data: aiRows } = await supabase
-    .from("ai_reports")
-    .select("kind, content")
-    .eq("user_id", profile.id)
-    .eq("report_date", workDate);
 
   const cachedCoach =
     (aiRows?.find((r) => r.kind === "coach")?.content as Coach | undefined) ?? null;
