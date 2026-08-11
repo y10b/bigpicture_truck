@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/components/ui";
-import { prettyDate, startOfMonth, startOfWeek, todayKST } from "@/lib/format";
+import { addDays, prettyDate, startOfMonth, startOfWeek, todayKST } from "@/lib/format";
 
 // 한 주는 월요일에 시작합니다.
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
@@ -163,6 +163,15 @@ export default function Calendar({
           }}
         />
         <Quick
+          label="어제"
+          onClick={() => {
+            const y = addDays(today, -1);
+            setFrom(y);
+            setTo(y);
+            setMonth(y.slice(0, 7));
+          }}
+        />
+        <Quick
           label="이번 주"
           onClick={() => {
             setFrom(startOfWeek(today));
@@ -182,25 +191,28 @@ export default function Calendar({
 
       {/* 선택 결과 + 적용 */}
       <div className="mt-3 border-t border-ink/8 pt-3">
-        <p className="mb-2.5 text-center text-[13px] font-semibold text-ink-2">
-          {from ? (
-            to && to !== from ? (
+        {!from ? (
+          <p className="mb-2.5 text-center text-[13px] text-ink-4">
+            보고 싶은 날짜를 눌러 주세요
+          </p>
+        ) : (
+          <p className="mb-2.5 text-center text-[13px] font-semibold text-ink-2">
+            {to && to !== from ? (
               <>
                 {prettyDate(from)} <span className="text-ink-4">~</span>{" "}
                 {prettyDate(to)}
               </>
             ) : (
               <>
-                {prettyDate(from)}{" "}
-                <span className="font-normal text-ink-4">
-                  · 종료일을 누르면 기간으로 봅니다
+                {prettyDate(from)}
+                <span className="ml-1 font-normal text-ink-4">
+                  · 하루만 보려면 그대로, 기간으로 보려면 끝 날짜를 한 번 더
+                  누르세요
                 </span>
               </>
-            )
-          ) : (
-            <span className="font-normal text-ink-4">시작일을 눌러 주세요</span>
-          )}
-        </p>
+            )}
+          </p>
+        )}
 
         <div className="flex gap-2">
           <button
@@ -214,9 +226,13 @@ export default function Calendar({
             type="button"
             disabled={!canApply}
             onClick={() => from && onApply(from, to ?? from)}
-            className="h-11 flex-1 rounded-xl bg-brand-500 text-[14px] font-bold text-white transition-colors active:bg-brand-700 disabled:opacity-40"
+            className="h-11 flex-[1.6] rounded-xl bg-brand-500 text-[14px] font-bold text-white transition-colors active:bg-brand-700 disabled:opacity-40"
           >
-            이 기간 보기
+            {!from
+              ? "날짜를 골라 주세요"
+              : to && to !== from
+                ? "이 기간 보기"
+                : `${prettyDate(from)} 하루만 보기`}
           </button>
         </div>
       </div>

@@ -38,48 +38,54 @@ export default function PeriodPicker({
 
   return (
     <div className="space-y-2">
-      <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="flex w-max gap-1.5">
-          {PRESETS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                go({ period: p.key });
-              }}
-              className={cn(
-                "rounded-full px-3.5 py-2 text-[13px] font-bold whitespace-nowrap transition-colors",
-                current === p.key
-                  ? "bg-ink text-paper"
-                  : "border border-ink/10 bg-card text-ink-3",
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
-
-          {/* 임의 기간 선택 */}
+      {/* 프리셋 네 개를 한 줄에 꽉 채웁니다 — 옆으로 밀지 않아도 다 보이게 */}
+      <div className="grid grid-cols-4 gap-1.5">
+        {PRESETS.map((p) => (
           <button
+            key={p.key}
             type="button"
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => {
+              setOpen(false);
+              go({ period: p.key });
+            }}
             className={cn(
-              "flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-bold whitespace-nowrap transition-colors",
-              current === "custom"
+              "rounded-full py-2 text-[13px] font-bold whitespace-nowrap transition-colors",
+              current === p.key
                 ? "bg-ink text-paper"
-                : open
-                  ? "border border-brand-400 bg-brand-50 text-brand-700"
-                  : "border border-ink/10 bg-card text-ink-3",
+                : "border border-ink/10 bg-card text-ink-3",
             )}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4.5" width="18" height="16" rx="2.5" />
-              <path d="M3 9.5h18M8 2.5v4M16 2.5v4" />
-            </svg>
-            {current === "custom" ? "기간 변경" : "날짜 선택"}
+            {p.label}
           </button>
-        </div>
+        ))}
       </div>
+
+      {/* 달력은 아래 줄에 따로 — 프리셋과 겹치지 않게 */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "flex w-full items-center justify-center gap-1.5 rounded-full py-2 text-[13px] font-bold transition-colors",
+          current === "custom"
+            ? "bg-ink text-paper"
+            : open
+              ? "border border-brand-400 bg-brand-50 text-brand-700"
+              : "border border-ink/10 bg-card text-ink-3",
+        )}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4.5" width="18" height="16" rx="2.5" />
+          <path d="M3 9.5h18M8 2.5v4M16 2.5v4" />
+        </svg>
+        {current === "custom" ? "날짜 다시 고르기" : "날짜로 고르기"}
+        <svg
+          width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+          className={cn("transition-transform", open && "rotate-180")}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
 
       {/* 현재 보고 있는 기간이 프리셋이 아니면 알려줍니다 */}
       {current === "custom" && !open && (
