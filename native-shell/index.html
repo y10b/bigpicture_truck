@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>BIG PICTURE</title>
+    <style>
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: #14161a;
+        color: #f5f3ec;
+        font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+        display: grid;
+        place-items: center;
+        text-align: center;
+      }
+      p { font-size: 15px; line-height: 1.7; opacity: 0.8; padding: 0 32px; }
+      b { color: #86c473; }
+    </style>
+  </head>
+  <body>
+    <!--
+      앱은 서버 화면을 띄웁니다(capacitor.config.ts 의 server.url).
+      이 파일은 인터넷이 아예 안 될 때만 보이는 대기 화면입니다.
+    -->
+    <p>
+      <b>BIG PICTURE</b><br /><br />
+      인터넷 연결을 확인해 주세요.<br />
+      연결되면 자동으로 이어집니다.
+    </p>
+  </body>
+</html>
