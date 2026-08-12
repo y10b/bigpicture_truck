@@ -6,10 +6,17 @@ import Calendar from "@/components/Calendar";
 import { cn } from "@/components/ui";
 import { prettyDate } from "@/lib/format";
 
-export type PeriodKey = "week" | "prevWeek" | "month" | "prevMonth" | "custom";
+export type PeriodKey =
+  | "today"
+  | "week"
+  | "prevWeek"
+  | "month"
+  | "prevMonth"
+  | "custom";
 
 /** 주는 월요일 시작 ~ 일요일 끝 기준입니다. */
 export const PRESETS: { key: Exclude<PeriodKey, "custom">; label: string }[] = [
+  { key: "today", label: "오늘" },
   { key: "week", label: "이번 주" },
   { key: "prevWeek", label: "지난주" },
   { key: "month", label: "이번 달" },
@@ -39,7 +46,7 @@ export default function PeriodPicker({
   return (
     <div className="space-y-2">
       {/* 프리셋 네 개를 한 줄에 꽉 채웁니다 — 옆으로 밀지 않아도 다 보이게 */}
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-5 gap-1.5">
         {PRESETS.map((p) => (
           <button
             key={p.key}
@@ -49,7 +56,7 @@ export default function PeriodPicker({
               go({ period: p.key });
             }}
             className={cn(
-              "rounded-full py-2 text-[13px] font-bold whitespace-nowrap transition-colors",
+              "rounded-full py-2 text-[12.5px] font-bold whitespace-nowrap transition-colors",
               current === p.key
                 ? "bg-ink text-paper"
                 : "border border-ink/10 bg-card text-ink-3",

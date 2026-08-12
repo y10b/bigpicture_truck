@@ -50,43 +50,6 @@ async function canModify(entryId: string): Promise<ActionResult> {
   return { ok: true };
 }
 
-/** 건별 1건 추가 (신용 또는 착불 + 추가금) */
-export async function addSingleEntry(formData: FormData): Promise<ActionResult> {
-  const profile = await requireProfile();
-  const supabase = await createClient();
-
-  const workDate = String(formData.get("work_date") ?? "");
-  if (!DATE_RE.test(workDate)) return { ok: false, error: "날짜가 올바르지 않습니다." };
-
-  const kind = String(formData.get("kind") ?? "credit");
-  const amount = toInt(formData.get("amount"));
-  const extra = toInt(formData.get("extra"));
-  const memo = String(formData.get("memo") ?? "").trim() || null;
-
-  if (amount === 0 && extra === 0) {
-    return { ok: false, error: "금액을 입력해 주세요." };
-  }
-
-  const { error } = await supabase.from("entries").insert({
-    user_id: profile.id,
-    work_date: workDate,
-    mode: "single",
-    count: 1,
-    credit: kind === "credit" ? amount : 0,
-    cod: kind === "cod" ? amount : 0,
-    extra,
-    expense: toInt(formData.get("expense")),
-    minutes: toInt(formData.get("minutes")) || null,
-    memo,
-  });
-
-  if (error) return { ok: false, error: "저장에 실패했습니다. 다시 시도해 주세요." };
-
-  revalidatePath("/home");
-  revalidatePath("/history");
-  return { ok: true };
-}
-
 /** 하루 마감 — 하루치를 몰아서 저장 (건수 + 신용합계 + 착불합계 + 추가금합계) */
 export async function addBulkEntry(formData: FormData): Promise<ActionResult> {
   const profile = await requireProfile();

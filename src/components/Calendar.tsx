@@ -155,14 +155,6 @@ export default function Calendar({
       {/* 빠른 선택 */}
       <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-ink/8 pt-2.5">
         <Quick
-          label="오늘"
-          onClick={() => {
-            setFrom(today);
-            setTo(today);
-            setMonth(today.slice(0, 7));
-          }}
-        />
-        <Quick
           label="어제"
           onClick={() => {
             const y = addDays(today, -1);

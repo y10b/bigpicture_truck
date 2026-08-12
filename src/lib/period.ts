@@ -12,7 +12,14 @@ import type { DayTotals } from "@/lib/types";
 import type { PeriodKey } from "@/components/PeriodPicker";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const KEYS: PeriodKey[] = ["week", "prevWeek", "month", "prevMonth", "custom"];
+const KEYS: PeriodKey[] = [
+  "today",
+  "week",
+  "prevWeek",
+  "month",
+  "prevMonth",
+  "custom",
+];
 
 /** 최대 조회 범위 — 그래프가 감당 못 할 만큼 넓어지는 걸 막습니다. */
 const MAX_DAYS = 366;
@@ -30,9 +37,13 @@ export function resolvePeriod(
   rawTo?: string,
 ): ResolvedPeriod {
   const today = todayKST();
-  const key = KEYS.includes(raw as PeriodKey) ? (raw as PeriodKey) : "7d";
+  // 값이 이상하면 기본값(이번 주)으로 떨어집니다.
+  const key = KEYS.includes(raw as PeriodKey) ? (raw as PeriodKey) : "week";
 
   switch (key) {
+    case "today":
+      return { key, from: today, to: today, label: "오늘" };
+
     // 한 주는 월요일에 시작해 일요일에 끝납니다.
     case "prevWeek": {
       const lastWeekDay = addDays(startOfWeek(today), -1);
