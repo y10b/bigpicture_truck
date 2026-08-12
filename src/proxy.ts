@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /** 로그인 없이 열 수 있는 경로 */
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/install"];
 
 /**
  * 모든 요청 앞단에서 Supabase 세션 쿠키를 갱신하고,
