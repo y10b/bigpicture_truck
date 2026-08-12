@@ -34,7 +34,9 @@ export default function EntryComposer({
   remaining: number;
   isLastWorkdayOfWeek: boolean;
 }) {
-  const [mode, setMode] = useState<Mode>("single");
+  // 기본은 '하루 마감'. 일 끝나고 한 번에 적는 쪽이 헷갈리지 않고,
+  // 건별로 찍고 싶은 분만 탭을 옮기면 됩니다.
+  const [mode, setMode] = useState<Mode>("bulk");
   const [kind, setKind] = useState<Kind>("credit");
   const [error, setError] = useState<string>();
   const [saved, setSaved] = useState(false);
@@ -97,11 +99,11 @@ export default function EntryComposer({
     <Card className="overflow-hidden">
       {/* 입력 방식 전환 */}
       <div className="flex gap-1 border-b border-ink/8 bg-paper-2/60 p-1.5">
-        <ModeTab active={mode === "single"} onClick={() => switchMode("single")}>
-          건별 입력
-        </ModeTab>
         <ModeTab active={mode === "bulk"} onClick={() => switchMode("bulk")}>
           하루 마감
+        </ModeTab>
+        <ModeTab active={mode === "single"} onClick={() => switchMode("single")}>
+          건별 입력
         </ModeTab>
         <ModeTab active={mode === "withdraw"} onClick={() => switchMode("withdraw")}>
           일주일 출금
@@ -124,14 +126,14 @@ export default function EntryComposer({
         {/* 두 방식이 같은 것이라는 걸 안 적어두면 뭘 골라야 하나 고민하게 됩니다 */}
         <div className="rounded-xl bg-paper-2/70 px-3.5 py-3">
           <p className="text-[13px] leading-relaxed text-ink-2">
-            <b>건별 입력</b>과 <b>하루 마감</b>은 적는 방법만 다르고{" "}
+            <b>하루 마감</b>과 <b>건별 입력</b>은 적는 방법만 다르고{" "}
             <b className="text-brand-600">결과는 똑같습니다.</b> 편한 쪽으로 쓰시면
             됩니다.
           </p>
           <p className="mt-1.5 text-[12px] leading-relaxed text-ink-4">
-            {mode === "single"
-              ? "지금은 건별 입력 — 한 건 끝날 때마다 바로 적는 방식입니다."
-              : "지금은 하루 마감 — 일 다 끝내고 하루치를 한 번에 적는 방식입니다."}
+            {mode === "bulk"
+              ? "지금은 하루 마감 — 일 다 끝내고 하루치를 한 번에 적는 방식입니다."
+              : "지금은 건별 입력 — 한 건 끝날 때마다 바로 적는 방식입니다."}
           </p>
         </div>
 
