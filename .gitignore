@@ -24,3 +24,7 @@ android/local.properties
 android/app/release.keystore
 ios/App/Pods
 ios/App/build
+
+# 안드로이드 서명 키 (커밋 금지 · 반드시 백업)
+release.keystore
+.android-signing
