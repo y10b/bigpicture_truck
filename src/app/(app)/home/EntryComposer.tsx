@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { addBulkEntry } from "../entry-actions";
+import { generateTodayFeedback } from "../feedback-actions";
 import {
   Alert,
   Button,
@@ -12,7 +13,7 @@ import {
   cn,
 } from "@/components/ui";
 import MoneyInput from "@/components/MoneyInput";
-import { won } from "@/lib/format";
+import { todayKST, won } from "@/lib/format";
 import type { Withdrawal } from "@/lib/types";
 import WithdrawalTab from "./WithdrawalTab";
 
@@ -38,6 +39,7 @@ export default function EntryComposer({
   const [saved, setSaved] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [showExtra, setShowExtra] = useState(false);
+  const [makingFeedback, setMakingFeedback] = useState(false);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -80,6 +82,15 @@ export default function EntryComposer({
       setResetKey((k) => k + 1);
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
+
+      // 마감을 저장했으니 그날 피드백을 만들어 둡니다.
+      // 오래 걸려도 저장은 이미 끝났으니 화면을 막지 않습니다.
+      if (workDate === todayKST()) {
+        setMakingFeedback(true);
+        void generateTodayFeedback()
+          .catch(() => {})
+          .finally(() => setMakingFeedback(false));
+      }
     });
   }
 
@@ -245,6 +256,12 @@ export default function EntryComposer({
 
           {error && <Alert>{error}</Alert>}
           {saved && <Alert tone="brand">저장했습니다 👍</Alert>}
+          {makingFeedback && (
+            <Alert tone="brand">
+              오늘 운행을 정리하고 있습니다… 잠시 뒤 마감 피드백 탭에서 보실 수
+              있습니다.
+            </Alert>
+          )}
 
           <Button
             type="submit"

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { fillDailySeries, resolvePeriod } from "@/lib/period";
-import { endOfWeek, prettyDate, startOfWeek, won } from "@/lib/format";
+import { prettyDate, won } from "@/lib/format";
 import { settleFromDaily } from "@/lib/settlement";
 import type { DayTotals, Withdrawal } from "@/lib/types";
 import { Card, CardHeader, Empty } from "@/components/ui";
@@ -26,14 +26,12 @@ export default async function HistoryPage({
   // 원본 entries 가 아니라 날짜별로 이미 합쳐진 뷰를 읽습니다.
   // (PostgREST 가 1000행까지만 주기 때문에 원본을 통째로 가져오면 합계가 틀어집니다)
   const [{ data }, { data: wdData }] = await Promise.all([
-    // 사납금은 "그 주에 일한 앞 N일"에 붙으므로, 기간이 주 중간에서 잘려도
-    // 순번이 맞도록 주 단위로 넓혀서 읽습니다.
     supabase
       .from("v_daily_totals")
       .select("work_date, count, credit, cod, extra, total")
       .eq("user_id", profile.id)
-      .gte("work_date", startOfWeek(period.from))
-      .lte("work_date", endOfWeek(period.to))
+      .gte("work_date", period.from)
+      .lte("work_date", period.to)
       .order("work_date", { ascending: true }),
     supabase
       .from("withdrawals")
@@ -44,10 +42,7 @@ export default async function HistoryPage({
       .order("work_date", { ascending: false }),
   ]);
 
-  const fullWeeks = (data ?? []) as DayTotals[];
-  const daily = fullWeeks.filter(
-    (d) => d.work_date >= period.from && d.work_date <= period.to,
-  );
+  const daily = (data ?? []) as DayTotals[];
   const withdrawals = (wdData ?? []) as Withdrawal[];
   const series = fillDailySeries(daily, period.from, period.to);
   const totals = sumTotals(daily);

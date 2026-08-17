@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addWithdrawal, deleteWithdrawal } from "../withdrawal-actions";
+import {
+  addWithdrawal,
+  deleteWithdrawal,
+  updateWithdrawal,
+} from "../withdrawal-actions";
 import { Alert, Button, Field, Input, cn } from "@/components/ui";
 import MoneyInput from "@/components/MoneyInput";
 import { prettyDate, won } from "@/lib/format";
@@ -29,6 +33,7 @@ export default function WithdrawalTab({
   isLastWorkdayOfWeek: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<string>();
   const [amount, setAmount] = useState(0);
   const [resetKey, setResetKey] = useState(0);
@@ -66,39 +71,84 @@ export default function WithdrawalTab({
           </p>
         ) : (
           <ul className="divide-y divide-ink/6 rounded-xl border border-ink/10">
-            {withdrawals.map((w) => (
-              <li
-                key={w.id}
-                className={cn(
-                  "flex items-center justify-between gap-3 px-3.5 py-2.5 transition-opacity",
-                  pending && "opacity-40",
-                )}
-              >
-                <div className="min-w-0">
-                  <p className="tnum text-[14px] font-bold">
-                    {won(w.amount)}원
-                    <span className="ml-1.5 text-[12px] font-semibold text-ink-4">
-                      {prettyDate(w.work_date)}
-                    </span>
-                  </p>
-                  {w.memo && (
-                    <p className="mt-0.5 truncate text-[12px] text-ink-4">
-                      {w.memo}
-                    </p>
+            {withdrawals.map((w) =>
+              editing === w.id ? (
+                <li key={w.id} className="px-3.5 py-3">
+                  <form
+                    action={(fd) => {
+                      fd.set("id", w.id);
+                      setError(undefined);
+                      startTransition(async () => {
+                        const res = await updateWithdrawal(fd);
+                        if (res.ok) setEditing(null);
+                        else setError(res.error);
+                      });
+                    }}
+                    className="space-y-3"
+                  >
+                    <Field label="출금액" required hint={prettyDate(w.work_date)}>
+                      <MoneyInput name="amount" defaultValue={w.amount} autoFocus />
+                    </Field>
+                    <Field label="메모" optional>
+                      <Input name="memo" defaultValue={w.memo ?? ""} maxLength={60} />
+                    </Field>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setEditing(null)}
+                      >
+                        취소
+                      </Button>
+                      <Button type="submit" className="flex-1" disabled={pending}>
+                        {pending ? "저장 중…" : "저장"}
+                      </Button>
+                    </div>
+                  </form>
+                </li>
+              ) : (
+                <li
+                  key={w.id}
+                  className={cn(
+                    "flex items-center justify-between gap-3 px-3.5 py-2.5 transition-opacity",
+                    pending && "opacity-40",
                   )}
-                </div>
-                <button
-                  onClick={() =>
-                    startTransition(() => {
-                      void deleteWithdrawal(w.id);
-                    })
-                  }
-                  className="shrink-0 rounded-lg px-2 py-1 text-[12px] font-semibold text-ink-4 transition-colors active:bg-ink/5"
                 >
-                  삭제
-                </button>
-              </li>
-            ))}
+                  <div className="min-w-0">
+                    <p className="tnum text-[14px] font-bold">
+                      {won(w.amount)}원
+                      <span className="ml-1.5 text-[12px] font-semibold text-ink-4">
+                        {prettyDate(w.work_date)}
+                      </span>
+                    </p>
+                    {w.memo && (
+                      <p className="mt-0.5 truncate text-[12px] text-ink-4">
+                        {w.memo}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => setEditing(w.id)}
+                      className="rounded-lg px-2 py-1 text-[12px] font-semibold text-ink-3 transition-colors active:bg-ink/5"
+                    >
+                      수정
+                    </button>
+                    <button
+                      onClick={() =>
+                        startTransition(() => {
+                          void deleteWithdrawal(w.id);
+                        })
+                      }
+                      className="rounded-lg px-2 py-1 text-[12px] font-semibold text-ink-4 transition-colors active:bg-ink/5"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </li>
+              ),
+            )}
           </ul>
         )}
       </div>

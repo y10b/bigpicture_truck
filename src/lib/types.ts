@@ -17,6 +17,8 @@ export type Profile = {
   notices_seen_at: string | null;
   /** 관리자가 발급한 임시 비밀번호를 아직 안 바꾼 상태 */
   must_change_password: boolean;
+  /** 위치 공유 사용 여부. 끄면 앱이 위치를 보내지 않습니다. */
+  share_location: boolean;
   created_at: string;
 };
 
@@ -59,6 +61,19 @@ export type EntryLog = {
   before: unknown;
   after: unknown;
   created_at: string;
+};
+
+export type DriverLocation = {
+  user_id: string;
+  lat: number;
+  lng: number;
+  /** 위치 오차(m) */
+  accuracy: number | null;
+  speed: number | null;
+  heading: number | null;
+  /** 기기에서 위치를 잡은 시각 */
+  recorded_at: string;
+  updated_at: string;
 };
 
 export type Notice = {

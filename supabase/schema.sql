@@ -713,3 +713,149 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
+-- ───────────────────────────────────────────────
+-- 13. driver_locations — 기사 현재 위치
+--     "지금 어디 있는지"만 보므로 사람당 한 줄입니다.
+--     이동 경로를 쌓지 않아 저장량이 거의 들지 않고,
+--     퇴근 후 위치가 남지 않아 개인 생활 시간도 덜 건드립니다.
+-- ───────────────────────────────────────────────
+create table if not exists public.driver_locations (
+  user_id     uuid primary key references public.profiles(id) on delete cascade,
+  lat         double precision not null,
+  lng         double precision not null,
+  -- 위치 오차(m). 균형 정확도로 받으므로 보통 30~150m 입니다.
+  accuracy    real,
+  -- 속도(m/s) · 방향(도). 없을 수 있습니다.
+  speed       real,
+  heading     real,
+  -- 기기에서 위치를 잡은 시각. 서버 도착 시각과 다를 수 있습니다.
+  recorded_at timestamptz not null,
+  updated_at  timestamptz not null default now()
+);
+
+comment on table public.driver_locations is
+  '기사 현재 위치. 경로는 쌓지 않고 최신 한 건만 덮어씁니다.';
+
+alter table public.driver_locations enable row level security;
+
+-- 본인 것만 쓰고, 본인 것만 봅니다.
+drop policy if exists driver_locations_own on public.driver_locations;
+create policy driver_locations_own on public.driver_locations for all
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- 관리자는 전부 봅니다 (읽기만 — 남의 위치를 고칠 이유가 없습니다).
+drop policy if exists driver_locations_admin on public.driver_locations;
+create policy driver_locations_admin on public.driver_locations for select
+  using (public.is_admin());
+
+drop trigger if exists driver_locations_touch on public.driver_locations;
+create trigger driver_locations_touch before update on public.driver_locations
+  for each row execute function public.touch_updated_at();
+
+-- 위치 공유 여부를 기사 본인이 끌 수 있게 (동의는 받았지만 스위치는 있어야 합니다)
+alter table public.profiles
+  add column if not exists share_location boolean not null default true;
+
+comment on column public.profiles.share_location is
+  '위치 공유 사용 여부. 끄면 앱이 위치를 보내지 않습니다.';
+
+notify pgrst, 'reload schema';
+-- ───────────────────────────────────────────────
+-- 14. daily_distance — 하루 주행거리
+--     위치는 최신 한 점만 두지만, 거리는 날짜별로 남깁니다.
+--     "어제보다 얼마나 뛰었나", "1km당 얼마 벌었나" 를 보려면 필요합니다.
+--     사람×날짜 한 줄이라 10명이면 1년에 3,650줄 — 부담 없습니다.
+-- ───────────────────────────────────────────────
+create table if not exists public.daily_distance (
+  user_id   uuid not null references public.profiles(id) on delete cascade,
+  work_date date not null,
+  -- 미터. 위치가 올라올 때마다 직전 점과의 거리를 더합니다.
+  meters    integer not null default 0 check (meters >= 0),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, work_date)
+);
+
+alter table public.daily_distance enable row level security;
+
+drop policy if exists daily_distance_own on public.daily_distance;
+create policy daily_distance_own on public.daily_distance for all
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+drop policy if exists daily_distance_admin on public.daily_distance;
+create policy daily_distance_admin on public.daily_distance for select
+  using (public.is_admin());
+
+/**
+ * 새 위치가 올라올 때 직전 점과의 거리를 더합니다.
+ *
+ * 서버에서 계산하는 이유: 앱이 보낸 거리를 그대로 믿으면 조작할 수 있고,
+ * 앱이 꺼졌다 켜져도 이어서 쌓여야 하기 때문입니다.
+ *
+ * 튀는 값은 버립니다. GPS 는 건물 사이나 터널에서 수백 미터씩 순간이동한
+ * 것처럼 찍히는 일이 흔해서, 그걸 거르지 않으면 주행거리가 부풀려집니다.
+ */
+create or replace function public.add_distance(
+  p_lat double precision,
+  p_lng double precision,
+  p_accuracy real,
+  p_recorded_at timestamptz
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  prev      public.driver_locations%rowtype;
+  today     date := (now() at time zone 'Asia/Seoul')::date;
+  seg_m     double precision := 0;
+  gap_s     double precision;
+  kmh       double precision;
+  total     integer;
+begin
+  if auth.uid() is null then
+    return 0;
+  end if;
+
+  -- 오차가 심한 점은 거리 계산에 쓰지 않습니다 (터널·건물 사이)
+  if p_accuracy is not null and p_accuracy > 300 then
+    select coalesce(meters, 0) into total
+      from public.daily_distance
+     where user_id = auth.uid() and work_date = today;
+    return coalesce(total, 0);
+  end if;
+
+  select * into prev from public.driver_locations where user_id = auth.uid();
+
+  if found then
+    -- 하버사인 (지구 반지름 6371km)
+    seg_m := 6371000 * 2 * asin(sqrt(
+      power(sin(radians(p_lat - prev.lat) / 2), 2)
+      + cos(radians(prev.lat)) * cos(radians(p_lat))
+      * power(sin(radians(p_lng - prev.lng) / 2), 2)
+    ));
+
+    gap_s := greatest(extract(epoch from (p_recorded_at - prev.recorded_at)), 1);
+    kmh := (seg_m / gap_s) * 3.6;
+
+    -- 시속 150km 를 넘으면 GPS 가 튄 것으로 보고 버립니다.
+    -- 하루가 바뀌었으면 어제 마지막 점과 이어 붙이지 않습니다.
+    if kmh > 150
+       or (prev.recorded_at at time zone 'Asia/Seoul')::date <> today then
+      seg_m := 0;
+    end if;
+  end if;
+
+  insert into public.daily_distance (user_id, work_date, meters)
+  values (auth.uid(), today, round(seg_m)::int)
+  on conflict (user_id, work_date) do update
+    set meters = public.daily_distance.meters + round(seg_m)::int,
+        updated_at = now()
+  returning meters into total;
+
+  return coalesce(total, 0);
+end $$;
+
+grant execute on function public.add_distance(double precision, double precision, real, timestamptz) to authenticated;
+
+notify pgrst, 'reload schema';

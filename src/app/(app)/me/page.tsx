@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logoutAction } from "@/app/login/actions";
 import { prettyPhone, startOfMonth, todayKST, won } from "@/lib/format";
 import { Badge, Button, Card, CardHeader } from "@/components/ui";
+import LocationToggle from "./LocationToggle";
 import PasswordForm from "./PasswordForm";
 
 export const metadata = { title: "내 정보 · BIG PICTURE" };
@@ -83,6 +84,8 @@ export default async function MePage() {
           </div>
         </div>
       </Card>
+
+      <LocationToggle on={profile.share_location} />
 
       <Card>
         <CardHeader title="비밀번호 변경" desc="6자 이상으로 정해 주세요" />

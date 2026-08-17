@@ -3,14 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { fillDailySeries, resolvePeriod } from "@/lib/period";
-import {
-  endOfWeek,
-  prettyDate,
-  prettyDateTime,
-  prettyPhone,
-  startOfWeek,
-  won,
-} from "@/lib/format";
+import { prettyDate, prettyDateTime, prettyPhone, won } from "@/lib/format";
 import { settleFromDaily } from "@/lib/settlement";
 import type { DayTotals, Entry, EntryLog, Profile, Withdrawal } from "@/lib/types";
 import { Badge, Card, CardHeader, Empty } from "@/components/ui";
@@ -43,13 +36,12 @@ export default async function MemberDetailPage({
   ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", id).maybeSingle(),
       // 합계·그래프는 날짜별로 합쳐진 뷰에서 (1000행 제한을 타지 않게)
-      // 사납금 순번이 맞도록 주 단위로 넓혀 읽고, 표시할 때 기간으로 자릅니다.
       supabase
         .from("v_daily_totals")
         .select("work_date, count, credit, cod, extra, total")
         .eq("user_id", id)
-        .gte("work_date", startOfWeek(period.from))
-        .lte("work_date", endOfWeek(period.to))
+        .gte("work_date", period.from)
+        .lte("work_date", period.to)
         .order("work_date", { ascending: true }),
       // 입력 원본은 최근 것만 보여주면 충분합니다
       supabase
@@ -80,10 +72,7 @@ export default async function MemberDetailPage({
 
   if (!profileData) notFound();
   const profile = profileData as Profile;
-  const fullWeeks = (dailyData ?? []) as DayTotals[];
-  const daily = fullWeeks.filter(
-    (d) => d.work_date >= period.from && d.work_date <= period.to,
-  );
+  const daily = (dailyData ?? []) as DayTotals[];
   const entries = (entryData ?? []) as Entry[];
   const withdrawals = (wdData ?? []) as Withdrawal[];
   const logs = (logRows ?? []) as EntryLog[];

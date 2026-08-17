@@ -42,6 +42,12 @@ const config: CapacitorConfig = {
       androidSplashResourceName: "splash",
       showSpinner: false,
     },
+    LocalNotifications: {
+      // 이걸 안 정해 주면 안드로이드가 런처 아이콘을 억지로 흑백으로 만들어
+      // 알림 표시줄에 흰 네모가 뜹니다.
+      smallIcon: "ic_stat_notify",
+      iconColor: "#4a8f3a",
+    },
   },
 };
 

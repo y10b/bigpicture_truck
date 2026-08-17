@@ -38,6 +38,37 @@ export async function addWithdrawal(formData: FormData): Promise<WithdrawResult>
   return { ok: true };
 }
 
+/** 출금 기록 수정 — 금액을 잘못 적는 일이 잦습니다 */
+export async function updateWithdrawal(formData: FormData): Promise<WithdrawResult> {
+  const profile = await requireProfile();
+  const supabase = await createClient();
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { ok: false, error: "잘못된 요청입니다." };
+
+  const amount = toInt(formData.get("amount"));
+  if (amount === 0) return { ok: false, error: "출금액을 입력해 주세요." };
+
+  // 관리자는 남의 것도 고칠 수 있게 (기사가 잘못 적으면 바로잡아야 합니다)
+  const query = supabase
+    .from("withdrawals")
+    .update({
+      amount,
+      memo: String(formData.get("memo") ?? "").trim() || null,
+    })
+    .eq("id", id);
+
+  const { error } =
+    profile.role === "admin" ? await query : await query.eq("user_id", profile.id);
+
+  if (error) return { ok: false, error: "수정에 실패했습니다." };
+
+  revalidatePath("/home");
+  revalidatePath("/history");
+  revalidatePath("/admin", "layout");
+  return { ok: true };
+}
+
 /** 출금 기록 삭제 */
 export async function deleteWithdrawal(id: string): Promise<WithdrawResult> {
   await requireProfile();

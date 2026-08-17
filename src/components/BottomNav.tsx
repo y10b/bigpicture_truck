@@ -132,6 +132,20 @@ export const IconGrid = (
   </svg>
 );
 
+export const IconMapPin = (
+  <svg {...base}>
+    <path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z" />
+    <circle cx="12" cy="10" r="2.6" />
+  </svg>
+);
+
+export const IconSparkle = (
+  <svg {...base}>
+    <path d="M12 3l1.8 4.9L18.7 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.7l4.9-1.8z" />
+    <path d="M18.5 16.5l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z" />
+  </svg>
+);
+
 export const IconList = (
   <svg {...base}>
     <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />

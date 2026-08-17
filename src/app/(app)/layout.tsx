@@ -1,9 +1,11 @@
 import { requireSettledProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import AppHeader from "@/components/AppHeader";
+import LocationTracker from "@/components/LocationTracker";
 import BottomNav, {
   IconChart,
   IconMegaphone,
+  IconSparkle,
   IconTruck,
   IconUser,
 } from "@/components/BottomNav";
@@ -28,11 +30,13 @@ export default async function AppLayout({
   return (
     <div className="min-h-dvh pb-24">
       <AppHeader profile={profile} />
+      <LocationTracker enabled={profile.share_location} />
       <main className="mx-auto max-w-2xl px-4 py-4">{children}</main>
       <BottomNav
         items={[
           { href: "/home", label: "정산입력", icon: IconTruck },
           { href: "/history", label: "내 내역", icon: IconChart },
+          { href: "/feedback", label: "피드백", icon: IconSparkle },
           {
             href: "/notices",
             label: "공지사항",
