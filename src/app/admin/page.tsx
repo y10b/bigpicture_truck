@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fillDailySeries, resolvePeriod } from "@/lib/period";
 import { prettyDate, todayKST, won } from "@/lib/format";
 import { settleFromUserTotals } from "@/lib/settlement";
+import { getUnsettledToday } from "@/lib/unsettled";
 import type { DayTotals, Profile, UserTotals } from "@/lib/types";
 import { Card, CardHeader, Empty } from "@/components/ui";
 import RankingView from "./RankingView";
@@ -90,9 +91,41 @@ export default async function AdminDashboard({
       : { period: period.key },
   ).toString();
 
+  // 오늘 뛴 기록은 있는데 정산이 안 들어온 사람 (레이아웃과 같은 요청이라 재조회 없음)
+  const unsettled = await getUnsettledToday();
+
   return (
     <div className="space-y-4 rise">
       <h1 className="text-[20px] font-extrabold tracking-tight">전체 정산 현황</h1>
+
+      {unsettled.length > 0 && (
+        <Card className="overflow-hidden border-accent/40">
+          <div className="border-b border-accent/25 bg-accent-soft px-4 py-3">
+            <p className="text-[14px] font-extrabold text-accent-deep">
+              오늘 정산이 안 들어온 사람{" "}
+              <span className="tnum">{unsettled.length}</span>명
+            </p>
+            <p className="mt-0.5 text-[12px] leading-relaxed text-accent-deep/80">
+              운행 기록은 있는데 정산 입력이 없습니다. 밤 9시에 알림도 갑니다.
+            </p>
+          </div>
+          <ul className="divide-y divide-ink/6">
+            {unsettled.map((u) => (
+              <li key={u.user_id}>
+                <Link
+                  href={`/admin/members/${u.user_id}`}
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors active:bg-paper-2"
+                >
+                  <span className="text-[14px] font-semibold">{u.name}</span>
+                  <span className="tnum text-[12px] font-semibold text-ink-4">
+                    오늘 {Math.round(u.meters / 100) / 10}km 운행
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* 관리자도 직접 배송을 뛰므로 본인 정산 입력을 대시보드 맨 위에 둡니다 */}
       <Link href="/home">

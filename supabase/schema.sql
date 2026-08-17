@@ -858,4 +858,45 @@ end $$;
 
 grant execute on function public.add_distance(double precision, double precision, real, timestamptz) to authenticated;
 
+-- ───────────────────────────────────────────────
+-- 15. unsettled_today — 오늘 뛰었는데 정산을 안 넣은 사람
+--     (2026-08 추가)
+--
+--     "일했는지" 는 주행거리로 판단합니다. 앱을 켜고 일을 시작하면
+--     위치가 쌓이므로, 하루 min_meters 이상 움직였는데 정산 기록이
+--     하나도 없으면 아직 안 넣은 것으로 봅니다.
+--
+--     GPS 가 조금씩 튀는 것과 구분해야 해서 기본 3km 로 잡았습니다.
+--     (add_distance 가 이미 말도 안 되는 구간은 버리고 쌓습니다)
+-- ───────────────────────────────────────────────
+create or replace function public.unsettled_today(min_meters integer default 3000)
+returns table (
+  user_id uuid,
+  name    text,
+  meters  int
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select d.user_id, p.name, d.meters
+  from public.daily_distance d
+  join public.profiles p on p.id = d.user_id
+  where public.is_admin()
+    and d.work_date = (now() at time zone 'Asia/Seoul')::date
+    and d.meters >= min_meters
+    and p.active
+    and not exists (
+      select 1
+      from public.entries e
+      where e.user_id  = d.user_id
+        and e.work_date = d.work_date
+    )
+  order by d.meters desc;
+$$;
+
+grant execute on function public.unsettled_today(integer) to authenticated;
+
 notify pgrst, 'reload schema';
+
