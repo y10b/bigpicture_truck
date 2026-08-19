@@ -898,5 +898,119 @@ $$;
 
 grant execute on function public.unsettled_today(integer) to authenticated;
 
-notify pgrst, 'reload schema';
+-- ───────────────────────────────────────────────
+-- 16. 팀 내역 — 직원도 서로의 실적을 볼 수 있게 (2026-08 추가)
+--
+--     entries 의 RLS 는 "본인 것 + 관리자" 그대로 둡니다.
+--     원본 행을 열어 주면 메모까지 다 보이고 되돌리기도 어렵습니다.
+--     대신 합계만 돌려주는 함수를 따로 두고 로그인한 사람에게 열어 줍니다.
+--
+--     출금·계좌·전화번호는 넣지 않습니다. 서로 볼 이유가 없는 정보입니다.
+-- ───────────────────────────────────────────────
 
+-- 기간 내 사람별 합계
+create or replace function public.team_totals_by_user(from_date date, to_date date)
+returns table (
+  user_id      uuid,
+  name         text,
+  vehicle_type text,
+  count  int,
+  credit int,
+  cod    int,
+  extra  int,
+  total  int,
+  days   int
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    p.id,
+    p.name,
+    p.vehicle_type,
+    coalesce(sum(e.count), 0)::int,
+    coalesce(sum(e.credit), 0)::int,
+    coalesce(sum(e.cod), 0)::int,
+    coalesce(sum(e.extra), 0)::int,
+    coalesce(sum(e.total), 0)::int,
+    count(distinct e.work_date)::int
+  from public.profiles p
+  left join public.entries e
+    on e.user_id = p.id
+   and e.work_date between from_date and to_date
+  where auth.uid() is not null   -- 로그인만 하면 됩니다
+    and p.active                 -- 그만둔 사람은 빼고 봅니다
+  group by p.id, p.name, p.vehicle_type
+  order by 8 desc, p.name;
+$$;
+
+-- 기간 내 팀 전체의 날짜별 합계 (그래프용)
+create or replace function public.team_totals_by_day(from_date date, to_date date)
+returns table (
+  work_date date,
+  count  int,
+  credit int,
+  cod    int,
+  extra  int,
+  total  int
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    e.work_date,
+    sum(e.count)::int,
+    sum(e.credit)::int,
+    sum(e.cod)::int,
+    sum(e.extra)::int,
+    sum(e.total)::int
+  from public.entries e
+  join public.profiles p on p.id = e.user_id and p.active
+  where auth.uid() is not null
+    and e.work_date between from_date and to_date
+  group by e.work_date
+  order by e.work_date;
+$$;
+
+-- 한 사람의 날짜별 합계 (팀 내역에서 눌러 들어갔을 때)
+create or replace function public.team_daily_by_user(
+  target uuid, from_date date, to_date date
+)
+returns table (
+  work_date date,
+  count  int,
+  credit int,
+  cod    int,
+  extra  int,
+  total  int
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    e.work_date,
+    sum(e.count)::int,
+    sum(e.credit)::int,
+    sum(e.cod)::int,
+    sum(e.extra)::int,
+    sum(e.total)::int
+  from public.entries e
+  join public.profiles p on p.id = e.user_id and p.active
+  where auth.uid() is not null
+    and e.user_id = target
+    and e.work_date between from_date and to_date
+  group by e.work_date
+  order by e.work_date;
+$$;
+
+grant execute on function public.team_totals_by_user(date, date)      to authenticated;
+grant execute on function public.team_totals_by_day(date, date)       to authenticated;
+grant execute on function public.team_daily_by_user(uuid, date, date) to authenticated;
+
+notify pgrst, 'reload schema';

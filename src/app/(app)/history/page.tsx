@@ -10,6 +10,7 @@ import PeriodPicker from "@/components/PeriodPicker";
 import SettlementCard from "@/components/SettlementCard";
 import TotalsCard, { sumTotals } from "@/components/TotalsCard";
 import { AmountChart, ChartLegend, CountChart } from "@/components/charts/SettlementChart";
+import HistoryTabs from "./HistoryTabs";
 
 export const metadata = { title: "내 내역 · BIG PICTURE" };
 
@@ -56,6 +57,11 @@ export default async function HistoryPage({
   return (
     <div className="space-y-4 rise">
       <h1 className="text-[20px] font-extrabold tracking-tight">내 정산 내역</h1>
+
+      <HistoryTabs
+        active="me"
+        query={`?period=${period.key}&from=${period.from}&to=${period.to}`}
+      />
 
       <PeriodPicker
         basePath="/history"
