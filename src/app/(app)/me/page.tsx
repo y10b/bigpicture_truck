@@ -2,6 +2,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logoutAction } from "@/app/login/actions";
 import { prettyPhone, startOfMonth, todayKST, won } from "@/lib/format";
+import Link from "next/link";
 import { Badge, Button, Card, CardHeader } from "@/components/ui";
 import LocationToggle from "./LocationToggle";
 import PasswordForm from "./PasswordForm";
@@ -20,6 +21,9 @@ export default async function MePage() {
     .eq("user_id", profile.id)
     .gte("work_date", startOfMonth(today))
     .lte("work_date", today);
+
+  // 읽을 권한이 있는 사람에게만 0 이 아닌 값이 옵니다 (함수 안에서 검사).
+  const { data: unreadVoice } = await supabase.rpc("voice_unread_count");
 
   const rows = data ?? [];
   const monthCount = rows.reduce((a, r) => a + (r.count ?? 0), 0);
@@ -84,6 +88,33 @@ export default async function MePage() {
           </div>
         </div>
       </Card>
+
+      {/* 고충을 말할 데가 있어야 합니다. 눈에 띄되, 내 정보 안에 둬서 남 앞에서 열 일이 없게 했습니다 */}
+      <Link href="/voice">
+        <Card className="flex items-center gap-3 border-brand-200 bg-brand-50 px-4 py-3.5 transition-colors active:bg-brand-100">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-[17px]">
+            🕊️
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="flex items-center gap-1.5 text-[14px] font-extrabold text-brand-700">
+              사장님께
+              {Boolean(unreadVoice) && (
+                <span className="tnum rounded-full bg-danger px-1.5 py-0.5 text-[10px] leading-none font-bold text-white">
+                  새 {unreadVoice}
+                </span>
+              )}
+            </p>
+            <p className="mt-0.5 text-[12px] leading-relaxed font-semibold text-brand-600/80">
+              {profile.can_read_voice
+                ? "들어온 이야기를 보고 답장할 수 있습니다"
+                : "힘든 점을 이름 없이 전할 수 있습니다"}
+            </p>
+          </div>
+          <span aria-hidden className="shrink-0 text-ink-4">
+            ›
+          </span>
+        </Card>
+      </Link>
 
       <LocationToggle on={profile.share_location} />
 

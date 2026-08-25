@@ -19,6 +19,8 @@ export type Profile = {
   must_change_password: boolean;
   /** 위치 공유 사용 여부. 끄면 앱이 위치를 보내지 않습니다. */
   share_location: boolean;
+  /** 사장님께 들어온 이야기를 읽을 수 있는 사람. 관리자 여부와 무관합니다. */
+  can_read_voice: boolean;
   created_at: string;
 };
 

@@ -1013,4 +1013,165 @@ grant execute on function public.team_totals_by_user(date, date)      to authent
 grant execute on function public.team_totals_by_day(date, date)       to authenticated;
 grant execute on function public.team_daily_by_user(uuid, date, date) to authenticated;
 
+-- ───────────────────────────────────────────────
+-- 17. 사장님께 — 비밀 소통 창구 (2026-08 추가)
+--
+--     누구나 쓸 수 있고, 정해진 사람만 읽습니다.
+--     "관리자면 다 본다" 가 아닙니다. 관리자 중에도 못 보는 사람이 있어야 해서
+--     역할이 아니라 사람별 권한(can_read_voice)으로 둡니다.
+--
+--     익명으로 보내면 읽는 쪽에 이름이 아예 가지 않습니다.
+--     그래서 읽는 사람에게는 테이블 select 권한을 주지 않고,
+--     이름을 지운 뒤 돌려주는 함수만 열어 둡니다.
+-- ───────────────────────────────────────────────
+
+alter table public.profiles
+  add column if not exists can_read_voice boolean not null default false;
+
+comment on column public.profiles.can_read_voice is
+  '사장님께 들어온 이야기를 읽을 수 있는 사람. 관리자 여부와 무관합니다.';
+
+create table if not exists public.voice_messages (
+  id         uuid primary key default gen_random_uuid(),
+  author_id  uuid not null references public.profiles(id) on delete cascade,
+  -- 이름을 밝히지 않고 보냈는지
+  anonymous  boolean not null default true,
+  body       text not null check (length(btrim(body)) > 0),
+  -- 읽는 사람이 남기는 답장
+  reply      text,
+  replied_by uuid references public.profiles(id) on delete set null,
+  replied_at timestamptz,
+  read_at    timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists voice_messages_created_idx
+  on public.voice_messages (created_at desc);
+create index if not exists voice_messages_author_idx
+  on public.voice_messages (author_id, created_at desc);
+
+alter table public.voice_messages enable row level security;
+
+-- 읽을 수 있는 사람인지. RLS 안에서 profiles 를 직접 보면 정책이 무한재귀합니다.
+create or replace function public.can_read_voice()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select p.can_read_voice from public.profiles p where p.id = auth.uid()),
+    false
+  );
+$$;
+
+grant execute on function public.can_read_voice() to authenticated;
+
+-- 쓴 사람은 본인 것만 봅니다. 읽는 사람에게는 select 를 주지 않습니다
+-- (아래 voice_inbox 함수로만 봅니다 — 익명 글의 author_id 가 새면 안 됩니다).
+drop policy if exists voice_own_select on public.voice_messages;
+create policy voice_own_select on public.voice_messages for select
+  using (author_id = auth.uid());
+
+drop policy if exists voice_own_insert on public.voice_messages;
+create policy voice_own_insert on public.voice_messages for insert
+  with check (author_id = auth.uid());
+
+-- 아직 읽히지 않았으면 거둬들일 수 있습니다.
+drop policy if exists voice_own_delete on public.voice_messages;
+create policy voice_own_delete on public.voice_messages for delete
+  using (author_id = auth.uid() and read_at is null);
+
+-- 읽는 쪽 목록. 익명이면 이름 자리에 null 을 넣어 돌려줍니다.
+create or replace function public.voice_inbox()
+returns table (
+  id         uuid,
+  body       text,
+  anonymous  boolean,
+  author_name text,
+  created_at timestamptz,
+  read_at    timestamptz,
+  reply      text,
+  replied_at timestamptz,
+  replier_name text
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    v.id,
+    v.body,
+    v.anonymous,
+    case when v.anonymous then null else p.name end,
+    v.created_at,
+    v.read_at,
+    v.reply,
+    v.replied_at,
+    r.name
+  from public.voice_messages v
+  join public.profiles p on p.id = v.author_id
+  left join public.profiles r on r.id = v.replied_by
+  where public.can_read_voice()
+  order by v.created_at desc;
+$$;
+
+grant execute on function public.voice_inbox() to authenticated;
+
+-- 아직 안 읽은 건수 (배지용)
+create or replace function public.voice_unread_count()
+returns integer
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when public.can_read_voice()
+      then (select count(*)::int from public.voice_messages where read_at is null)
+    else 0
+  end;
+$$;
+
+grant execute on function public.voice_unread_count() to authenticated;
+
+create or replace function public.voice_mark_read(target uuid)
+returns void
+language sql
+volatile
+security definer
+set search_path = public
+as $$
+  update public.voice_messages
+     set read_at = now()
+   where id = target
+     and read_at is null
+     and public.can_read_voice();
+$$;
+
+grant execute on function public.voice_mark_read(uuid) to authenticated;
+
+create or replace function public.voice_reply(target uuid, reply_text text)
+returns void
+language sql
+volatile
+security definer
+set search_path = public
+as $$
+  update public.voice_messages
+     set reply      = nullif(btrim(reply_text), ''),
+         replied_by = case when nullif(btrim(reply_text), '') is null then null else auth.uid() end,
+         replied_at = case when nullif(btrim(reply_text), '') is null then null else now() end,
+         read_at    = coalesce(read_at, now())
+   where id = target
+     and public.can_read_voice();
+$$;
+
+grant execute on function public.voice_reply(uuid, text) to authenticated;
+
+-- 읽을 사람 지정: 사장님(곽풀잎)과 화면 확인용 관리자(김승준) 두 명뿐입니다.
+update public.profiles set can_read_voice = (phone in ('01025225858', '01000000000'));
+
 notify pgrst, 'reload schema';
