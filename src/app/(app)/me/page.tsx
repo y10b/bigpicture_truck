@@ -1,7 +1,7 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logoutAction } from "@/app/login/actions";
-import { prettyPhone, startOfMonth, todayKST, won } from "@/lib/format";
+import { endOfMonth, prettyDate, prettyPhone, startOfMonth, todayKST, won } from "@/lib/format";
 import Link from "next/link";
 import { Badge, Button, Card, CardHeader } from "@/components/ui";
 import LocationToggle from "./LocationToggle";
@@ -24,6 +24,22 @@ export default async function MePage() {
 
   // 읽을 권한이 있는 사람에게만 0 이 아닌 값이 옵니다 (함수 안에서 검사).
   const { data: unreadVoice } = await supabase.rpc("voice_unread_count");
+
+  // 이번 달 출근 일수(마감한 날)와 잡아 둔 월차
+  const [{ count: attendedDays }, { data: myLeave }] = await Promise.all([
+    supabase
+      .from("v_daily_totals")
+      .select("work_date", { count: "exact", head: true })
+      .eq("user_id", profile.id)
+      .gte("work_date", startOfMonth(today))
+      .lte("work_date", today),
+    supabase
+      .from("leaves")
+      .select("leave_date")
+      .gte("leave_date", startOfMonth(today))
+      .lte("leave_date", endOfMonth(today))
+      .maybeSingle(),
+  ]);
 
   const rows = data ?? [];
   const monthCount = rows.reduce((a, r) => a + (r.count ?? 0), 0);
@@ -75,7 +91,13 @@ export default async function MePage() {
           </dl>
         )}
 
-        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-ink/8 pt-4">
+        <div className="mt-4 grid grid-cols-3 gap-3 border-t border-ink/8 pt-4">
+          <div>
+            <p className="text-[12px] font-semibold text-ink-4">이번 달 출근</p>
+            <p className="tnum mt-0.5 text-[17px] font-extrabold">
+              {attendedDays ?? 0}일
+            </p>
+          </div>
           <div>
             <p className="text-[12px] font-semibold text-ink-4">이번 달 건수</p>
             <p className="tnum mt-0.5 text-[17px] font-extrabold">{monthCount}건</p>
@@ -88,6 +110,25 @@ export default async function MePage() {
           </div>
         </div>
       </Card>
+
+      <Link href="/leave">
+        <Card className="flex items-center gap-3 px-4 py-3.5 transition-colors active:bg-paper-2">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-[17px]">
+            🌴
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-extrabold">월차</p>
+            <p className="mt-0.5 text-[12px] leading-relaxed font-semibold text-ink-4">
+              {myLeave
+                ? `이번 달은 ${prettyDate(myLeave.leave_date)}로 잡혀 있습니다`
+                : "이번 달 월차를 아직 안 잡으셨습니다"}
+            </p>
+          </div>
+          <span aria-hidden className="shrink-0 text-ink-4">
+            ›
+          </span>
+        </Card>
+      </Link>
 
       {/* 고충을 말할 데가 있어야 합니다. 눈에 띄되, 내 정보 안에 둬서 남 앞에서 열 일이 없게 했습니다 */}
       <Link href="/voice">

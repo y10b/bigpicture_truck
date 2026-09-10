@@ -1174,4 +1174,130 @@ grant execute on function public.voice_reply(uuid, text) to authenticated;
 -- 읽을 사람 지정: 사장님(곽풀잎)과 화면 확인용 관리자(김승준) 두 명뿐입니다.
 update public.profiles set can_read_voice = (phone in ('01025225858', '01000000000'));
 
+-- ───────────────────────────────────────────────
+-- 18. 출근 · 월차 (2026-09 추가)
+--
+--     출근은 두 단계로 봅니다.
+--       · 앱을 켠 시각        → "나왔다" 는 신호. 관리자가 아침에 확인합니다.
+--       · 하루 마감(정산 입력) → 그날 근무 확정. 출근 일수는 이걸로 셉니다.
+--     둘을 나눈 이유: 앱만 켜고 마감을 안 한 사람을 찾아내야 하기 때문입니다.
+-- ───────────────────────────────────────────────
+
+create table if not exists public.attendance (
+  user_id       uuid not null references public.profiles(id) on delete cascade,
+  work_date     date not null,
+  -- 그날 앱을 처음 켠 시각 = 출근 시각
+  first_open_at timestamptz not null default now(),
+  -- 마지막으로 앱을 켠 시각 (아직 쓰고 있는지 가늠용)
+  last_open_at  timestamptz not null default now(),
+  primary key (user_id, work_date)
+);
+
+create index if not exists attendance_date_idx
+  on public.attendance (work_date desc);
+
+alter table public.attendance enable row level security;
+
+drop policy if exists attendance_own on public.attendance;
+create policy attendance_own on public.attendance for all
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+drop policy if exists attendance_admin on public.attendance;
+create policy attendance_admin on public.attendance for select
+  using (public.is_admin());
+
+/**
+ * 앱을 켤 때마다 부릅니다.
+ * 그날 처음이면 새로 넣고, 아니면 마지막 시각만 갱신합니다.
+ * 처음이었는지(true/false)를 돌려주므로, 화면에서 "출근 기록됨" 을 한 번만 띄울 수 있습니다.
+ */
+create or replace function public.check_in()
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  today date := (now() at time zone 'Asia/Seoul')::date;
+  is_first boolean;
+begin
+  if auth.uid() is null then
+    return false;
+  end if;
+
+  insert into public.attendance (user_id, work_date)
+  values (auth.uid(), today)
+  on conflict (user_id, work_date) do update
+    set last_open_at = now()
+  returning (xmax = 0) into is_first;   -- xmax=0 이면 방금 새로 넣은 행입니다
+
+  return coalesce(is_first, false);
+end $$;
+
+grant execute on function public.check_in() to authenticated;
+
+-- ───────────────────────────────────────────────
+--  월차 — 한 사람이 한 달에 하루
+-- ───────────────────────────────────────────────
+create table if not exists public.leaves (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  leave_date date not null,
+  memo       text,
+  -- 관리자가 대신 넣었으면 그 사람. 본인이 넣었으면 본인과 같습니다.
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (user_id, leave_date)
+);
+
+create index if not exists leaves_date_idx on public.leaves (leave_date);
+create index if not exists leaves_user_idx on public.leaves (user_id, leave_date);
+
+alter table public.leaves enable row level security;
+
+drop policy if exists leaves_own_select on public.leaves;
+create policy leaves_own_select on public.leaves for select
+  using (user_id = auth.uid());
+
+drop policy if exists leaves_own_insert on public.leaves;
+create policy leaves_own_insert on public.leaves for insert
+  with check (user_id = auth.uid());
+
+drop policy if exists leaves_own_delete on public.leaves;
+create policy leaves_own_delete on public.leaves for delete
+  using (user_id = auth.uid());
+
+drop policy if exists leaves_admin on public.leaves;
+create policy leaves_admin on public.leaves for all
+  using (public.is_admin()) with check (public.is_admin());
+
+/**
+ * 한 달에 하루 규칙은 DB 에서 막습니다.
+ * 화면에서만 막으면 요청을 직접 보내 우회할 수 있습니다.
+ */
+create or replace function public.enforce_monthly_leave_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if exists (
+    select 1 from public.leaves l
+    where l.user_id = new.user_id
+      and date_trunc('month', l.leave_date) = date_trunc('month', new.leave_date)
+      and l.id <> new.id
+  ) then
+    raise exception '한 달에 월차는 하루만 쓸 수 있습니다.'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists leaves_monthly_limit on public.leaves;
+create trigger leaves_monthly_limit
+  before insert or update on public.leaves
+  for each row execute function public.enforce_monthly_leave_limit();
+
 notify pgrst, 'reload schema';

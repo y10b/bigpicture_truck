@@ -2,7 +2,9 @@ import { requireAdmin } from "@/lib/auth";
 import { getUnsettledToday } from "@/lib/unsettled";
 import AppHeader from "@/components/AppHeader";
 import AdminReminders from "@/components/AdminReminders";
+import CheckIn from "@/components/CheckIn";
 import BottomNav, {
+  IconCalendar,
   IconGrid,
   IconMapPin,
   IconMegaphone,
@@ -23,11 +25,14 @@ export default async function AdminLayout({
     <div className="min-h-dvh pb-24">
       <AppHeader profile={profile} adminView />
       <AdminReminders names={unsettled.map((u) => u.name)} />
+      {/* 관리자도 직접 배송을 뛰므로 출근이 남아야 합니다 */}
+      <CheckIn />
       <main className="mx-auto max-w-2xl px-4 py-4">{children}</main>
       <BottomNav
         items={[
           { href: "/admin", label: "대시보드", icon: IconGrid, exact: true },
           { href: "/admin/members", label: "직원", icon: IconUsers },
+          { href: "/admin/attendance", label: "출근", icon: IconCalendar },
           { href: "/admin/locations", label: "위치", icon: IconMapPin },
           { href: "/admin/notices", label: "공지", icon: IconMegaphone },
           // 관리자도 직접 배송을 뛰므로 본인 정산 입력으로 바로 갑니다

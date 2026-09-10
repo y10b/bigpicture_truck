@@ -151,3 +151,10 @@ export const IconList = (
     <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
   </svg>
 );
+
+export const IconCalendar = (
+  <svg {...base}>
+    <rect x="3" y="5" width="18" height="16" rx="2.4" />
+    <path d="M3 10h18M8 3v4M16 3v4" />
+  </svg>
+);
