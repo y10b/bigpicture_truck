@@ -33,7 +33,11 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
+        with:
+          # 기본값이 'tools platform-tools' 인데 'tools' 는 SDK 저장소에서 없어졌습니다.
+          # 러너 이미지에 이미 SDK 가 깔려 있어 추가 설치가 필요 없습니다.
+          packages: ''
 
       - name: 의존성 설치
         run: npm ci
