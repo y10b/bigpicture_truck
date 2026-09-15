@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import AppHeader from "@/components/AppHeader";
 import LocationTracker from "@/components/LocationTracker";
 import CheckIn from "@/components/CheckIn";
+import PushSetup from "@/components/PushSetup";
 import BottomNav, {
   IconChart,
   IconMegaphone,
@@ -34,6 +35,7 @@ export default async function AppLayout({
       <LocationTracker enabled={profile.share_location} />
       {/* 앱을 연 것만으로 출근이 남습니다 */}
       <CheckIn />
+      <PushSetup />
       <main className="mx-auto max-w-2xl px-4 py-4">{children}</main>
       <BottomNav
         items={[

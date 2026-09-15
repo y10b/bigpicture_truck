@@ -3,6 +3,7 @@ import { getUnsettledToday } from "@/lib/unsettled";
 import AppHeader from "@/components/AppHeader";
 import AdminReminders from "@/components/AdminReminders";
 import CheckIn from "@/components/CheckIn";
+import PushSetup from "@/components/PushSetup";
 import BottomNav, {
   IconCalendar,
   IconGrid,
@@ -27,6 +28,7 @@ export default async function AdminLayout({
       <AdminReminders names={unsettled.map((u) => u.name)} />
       {/* 관리자도 직접 배송을 뛰므로 출근이 남아야 합니다 */}
       <CheckIn />
+      <PushSetup />
       <main className="mx-auto max-w-2xl px-4 py-4">{children}</main>
       <BottomNav
         items={[

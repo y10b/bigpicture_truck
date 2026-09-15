@@ -1300,4 +1300,48 @@ create trigger leaves_monthly_limit
   before insert or update on public.leaves
   for each row execute function public.enforce_monthly_leave_limit();
 
+-- ───────────────────────────────────────────────
+-- 19. 푸시 알림용 기기 토큰 (2026-09 추가)
+--
+--     기기 예약 알림(local notifications)은 그 폰 안에서만 돕니다.
+--     "직원이 앱을 켰다" 를 관리자 폰으로 보내려면 서버가 밀어야 하고,
+--     안드로이드에서는 구글 FCM 을 거치는 수밖에 없습니다.
+--
+--     한 사람이 폰을 여러 대 쓸 수 있으므로 토큰마다 한 줄입니다.
+--     토큰은 재설치·앱 데이터 삭제 때 바뀌므로 갱신될 때마다 덮어씁니다.
+-- ───────────────────────────────────────────────
+create table if not exists public.push_tokens (
+  token      text primary key,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  platform   text not null default 'android',
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists push_tokens_user_idx on public.push_tokens (user_id);
+
+alter table public.push_tokens enable row level security;
+
+-- 본인 토큰만 등록·삭제합니다. 남의 토큰은 읽을 수도 없습니다
+-- (읽을 수 있으면 아무한테나 알림을 보낼 수 있게 됩니다).
+drop policy if exists push_tokens_own on public.push_tokens;
+create policy push_tokens_own on public.push_tokens for all
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+/**
+ * 알림을 받을 사람들의 토큰.
+ * 서버(서비스 롤)에서만 부르며, 관리자 전원 또는 지정한 사람들에게 보냅니다.
+ */
+create or replace function public.push_targets(target_ids uuid[])
+returns table (token text, user_id uuid)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select t.token, t.user_id
+  from public.push_tokens t
+  join public.profiles p on p.id = t.user_id and p.active
+  where t.user_id = any(target_ids);
+$$;
+
 notify pgrst, 'reload schema';
