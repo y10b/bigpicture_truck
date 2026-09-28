@@ -1344,4 +1344,44 @@ as $$
   where t.user_id = any(target_ids);
 $$;
 
+-- ───────────────────────────────────────────────
+-- 20. 프로필에서 본인이 못 건드릴 칸 막기 (2026-09 추가)
+--
+--     RLS 는 "이 행을 고쳐도 되는가" 만 봅니다. 컬럼 단위로는 못 막습니다.
+--     그래서 profiles_update_self 만 두면 직원이 자기 행의 role 을 admin 으로
+--     바꾸거나 can_read_voice 를 켜서 익명 고충함을 열어 볼 수 있습니다.
+--     실제로 되는 것을 확인하고 막습니다.
+--
+--     관리자 화면은 서비스 롤로 돌기 때문에 auth.uid() 가 비어 있습니다.
+--     그 경우와 관리자 본인은 그대로 통과시킵니다.
+-- ───────────────────────────────────────────────
+create or replace function public.protect_profile_columns()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- 서버(서비스 롤) 또는 관리자면 손대지 않습니다
+  if auth.uid() is null or public.is_admin() then
+    return new;
+  end if;
+
+  -- 본인이 고칠 수 있는 건 이름·차량·계좌·위치공유 정도입니다.
+  -- 나머지는 무엇을 보내오든 원래 값으로 되돌립니다.
+  new.id             := old.id;
+  new.role           := old.role;
+  new.active         := old.active;
+  new.can_read_voice := old.can_read_voice;
+  new.phone          := old.phone;   -- 번호가 곧 로그인 아이디라 혼자 바꾸면 로그인이 깨집니다
+  new.created_at     := old.created_at;
+
+  return new;
+end $$;
+
+drop trigger if exists profiles_protect on public.profiles;
+create trigger profiles_protect
+  before update on public.profiles
+  for each row execute function public.protect_profile_columns();
+
 notify pgrst, 'reload schema';

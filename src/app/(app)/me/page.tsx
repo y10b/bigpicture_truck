@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Badge, Button, Card, CardHeader } from "@/components/ui";
 import LocationToggle from "./LocationToggle";
 import PasswordForm from "./PasswordForm";
+import MyInfoForm from "./MyInfoForm";
 
 export const metadata = { title: "내 정보 · BIG PICTURE" };
 
@@ -65,31 +66,7 @@ export default async function MePage() {
           </div>
         </div>
 
-        {(profile.vehicle_no || profile.vehicle_type || profile.bank_account) && (
-          <dl className="mt-4 space-y-2 border-t border-ink/8 pt-4">
-            {(profile.vehicle_no || profile.vehicle_type) && (
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-[12px] font-semibold text-ink-4">차량</dt>
-                <dd className="text-[13px] font-semibold">
-                  {[profile.vehicle_no, profile.vehicle_type]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </dd>
-              </div>
-            )}
-            {profile.bank_account && (
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="shrink-0 text-[12px] font-semibold text-ink-4">계좌</dt>
-                <dd className="tnum truncate text-[13px] font-semibold">
-                  {profile.bank_account}
-                </dd>
-              </div>
-            )}
-            <p className="pt-0.5 text-[11px] text-ink-4">
-              틀린 곳이 있으면 관리자에게 말씀해 주세요.
-            </p>
-          </dl>
-        )}
+        <MyInfoForm profile={profile} />
 
         <div className="mt-4 grid grid-cols-3 gap-3 border-t border-ink/8 pt-4">
           <div>
