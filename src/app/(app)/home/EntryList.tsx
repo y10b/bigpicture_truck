@@ -2,7 +2,7 @@
 
 import { Card, Empty } from "@/components/ui";
 import EntryRow from "@/components/EntryRow";
-import { isWrittenToday } from "@/lib/format";
+import { isThisWeek } from "@/lib/format";
 import type { Entry, EntryLog } from "@/lib/types";
 
 export default function EntryList({
@@ -33,7 +33,7 @@ export default function EntryList({
   return (
     <div className="space-y-2">
       {entries.map((e) => {
-        const editable = isAdmin || isWrittenToday(e.created_at);
+        const editable = isAdmin || isThisWeek(e.work_date);
         return (
           <EntryRow
             key={e.id}

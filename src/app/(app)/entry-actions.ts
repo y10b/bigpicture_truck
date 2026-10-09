@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
-import { isWrittenToday } from "@/lib/format";
+import { isThisWeek } from "@/lib/format";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -18,7 +18,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  * 이 내역을 고치거나 지울 수 있는지 판단합니다.
  *
  * - 관리자: 누구 내역이든 언제든 가능 (직원이 잘못 올린 걸 바로잡아야 하므로)
- * - 직원  : 본인 것만, 그리고 **오늘 적은 것**만
+ * - 직원  : 본인 것만, 그리고 **이번 주에 일한 것**만
  *
  * 기준을 work_date 가 아니라 적은 날(created_at)로 잡은 이유는,
  * 지난 날짜를 뒤늦게 입력하는 경우가 있어서입니다. 방금 적은 것은 바로
@@ -32,7 +32,7 @@ async function canModify(entryId: string): Promise<ActionResult> {
 
   const { data } = await supabase
     .from("entries")
-    .select("user_id, created_at")
+    .select("user_id, work_date")
     .eq("id", entryId)
     .maybeSingle();
 
@@ -41,10 +41,11 @@ async function canModify(entryId: string): Promise<ActionResult> {
   if (data.user_id !== profile.id) {
     return { ok: false, error: "본인 내역만 수정할 수 있습니다." };
   }
-  if (!isWrittenToday(data.created_at)) {
+  // 그 주에 일한 건 본인이 고칩니다. 지난주 것부터는 관리자에게.
+  if (!isThisWeek(data.work_date)) {
     return {
       ok: false,
-      error: "오늘 적은 것만 수정할 수 있습니다. 지난 것은 관리자에게 말씀해 주세요.",
+      error: "이번 주에 일한 것만 수정할 수 있습니다. 지난주 것은 관리자에게 말씀해 주세요.",
     };
   }
   return { ok: true };

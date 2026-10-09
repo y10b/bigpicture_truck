@@ -45,14 +45,14 @@ export function todayKST() {
 }
 
 /** 이 기록이 오늘(한국 시간) 적힌 것인지 — 직원이 고칠 수 있는지 판단에 씁니다. */
-export function isWrittenToday(createdAt: string) {
-  const day = new Intl.DateTimeFormat("en-CA", {
-    timeZone: KST,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(createdAt));
-  return day === todayKST();
+
+/**
+ * 그 날짜가 이번 주(월~일) 안인지.
+ * 기사분들이 본인 정산을 고칠 수 있는 범위입니다 — DB 정책도 같은 기준입니다.
+ */
+export function isThisWeek(workDate: string) {
+  const today = todayKST();
+  return workDate >= startOfWeek(today) && workDate <= endOfWeek(today);
 }
 
 /** YYYY-MM-DD 에 일수를 더합니다 (UTC 기준 계산이라 DST 영향 없음). */

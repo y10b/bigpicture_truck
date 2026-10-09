@@ -5,11 +5,15 @@ import { resolvePeriod } from "@/lib/period";
 import { dateRange } from "@/lib/format";
 import type { DayTotals, Profile, Withdrawal } from "@/lib/types";
 
+/** 엑셀에 찍을 요일 (0=일) */
+const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
+
 /**
  * 관리자용 엑셀 내려받기.
  *
  * 직원 한 명당 탭 하나. 각 탭은 날짜가 하루씩 내려가고,
- * 가로로 신용 · 착불 · 추가금 · 합계 · 출금 · 미출금액이 붙습니다.
+ * 가로로 신용 · 착불 · 추가금 · 합계 · 출금 · 누적 근무일수가 붙습니다.
+ * 근무일수는 '그날 일했는가'(건수나 금액이 있으면 근무)로 셉니다.
  *
  * ⚠️ PostgREST 는 한 번에 1000행까지만 주므로, 기간이 길면 나눠 받아야
  *    합니다 (10명 × 1년 = 3650행). fetchAll 이 그 일을 합니다.
@@ -116,17 +120,21 @@ export async function GET(request: Request) {
   const summary = wb.addWorksheet("전체 요약", {
     views: [{ state: "frozen", ySplit: 3 }],
   });
-  summary.mergeCells("A1:G1");
+  summary.mergeCells("A1:I1");
   summary.getCell("A1").value = `BIG PICTURE 정산 — ${period.label}`;
   summary.getCell("A1").font = { size: 14, bold: true };
   summary.getCell("A2").value = `${period.from} ~ ${period.to}`;
   summary.getCell("A2").font = { size: 10, color: { argb: "FF888888" } };
 
-  const sumHeader = ["이름", "신용", "착불", "추가금", "합계", "출금", "미출금액"];
+  const sumHeader = [
+    "이름", "신용", "착불", "추가금", "합계", "출금",
+    "근무일수", "평일", "주말·휴일",
+  ];
   summary.getRow(3).values = sumHeader;
   summary.columns = [
     { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 },
-    { width: 15 }, { width: 14 }, { width: 15 },
+    { width: 15 }, { width: 14 },
+    { width: 11 }, { width: 9 }, { width: 11 },
   ];
 
   const styleHeader = (row: ExcelJS.Row) => {
@@ -140,7 +148,10 @@ export async function GET(request: Request) {
   };
   styleHeader(summary.getRow(3));
 
-  const totals = { credit: 0, cod: 0, extra: 0, total: 0, withdrawn: 0 };
+  const totals = {
+    credit: 0, cod: 0, extra: 0, total: 0, withdrawn: 0,
+    days: 0, weekday: 0, weekend: 0,
+  };
 
   /* ── 직원별 탭 ────────────────────────────────────── */
   const used = new Set<string>(["전체 요약"]);
@@ -153,7 +164,7 @@ export async function GET(request: Request) {
       views: [{ state: "frozen", ySplit: 4 }],
     });
 
-    ws.mergeCells("A1:G1");
+    ws.mergeCells("A1:H1");
     ws.getCell("A1").value = `${p.name} — ${period.label}`;
     ws.getCell("A1").font = { size: 13, bold: true };
     ws.getCell("A2").value = [
@@ -166,16 +177,20 @@ export async function GET(request: Request) {
     ws.getCell("A2").font = { size: 10, color: { argb: "FF888888" } };
 
     ws.getRow(4).values = [
-      "날짜", "신용", "착불", "추가금", "합계", "출금", "미출금액",
+      "날짜", "요일", "신용", "착불", "추가금", "합계", "출금", "누적 근무일수",
     ];
     ws.columns = [
-      { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
-      { width: 14 }, { width: 13 }, { width: 14 },
+      { width: 13 }, { width: 7 }, { width: 13 }, { width: 13 },
+      { width: 13 }, { width: 14 }, { width: 13 }, { width: 13 },
     ];
     styleHeader(ws.getRow(4));
 
-    let running = 0; // 누적 미출금 = 그때까지 매출 - 그때까지 출금
-    const acc = { credit: 0, cod: 0, extra: 0, total: 0, withdrawn: 0 };
+    // 누적 근무일수 — 그날까지 며칠 일했는지
+    let worked = 0;
+    const acc = {
+      credit: 0, cod: 0, extra: 0, total: 0, withdrawn: 0,
+      days: 0, weekday: 0, weekend: 0,
+    };
     let r = 5;
 
     for (const date of days) {
@@ -188,7 +203,18 @@ export async function GET(request: Request) {
       const cod = d?.cod ?? 0;
       const extra = d?.extra ?? 0;
       const total = d?.total ?? 0;
-      running += total - wd;
+
+      const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+      const weekend = dow === 0 || dow === 6;
+      // 건수든 금액이든 하나라도 있으면 그날 일한 것으로 봅니다.
+      // (출금만 있는 날은 근무로 세지 않습니다)
+      const didWork = (d?.count ?? 0) > 0 || total > 0;
+      if (didWork) {
+        worked += 1;
+        acc.days += 1;
+        if (weekend) acc.weekend += 1;
+        else acc.weekday += 1;
+      }
 
       acc.credit += credit;
       acc.cod += cod;
@@ -197,16 +223,20 @@ export async function GET(request: Request) {
       acc.withdrawn += wd;
 
       const row = ws.getRow(r++);
-      row.values = [date, credit, cod, extra, total, wd || null, running];
+      row.values = [
+        date, WEEKDAY[dow], credit, cod, extra, total, wd || null,
+        didWork ? worked : null,
+      ];
       row.getCell(1).alignment = { horizontal: "center" };
-      for (let c = 2; c <= 7; c++) row.getCell(c).numFmt = MONEY;
-      row.getCell(5).font = { bold: true };
+      row.getCell(2).alignment = { horizontal: "center" };
+      for (let c = 3; c <= 7; c++) row.getCell(c).numFmt = MONEY;
+      row.getCell(6).font = { bold: true };
+      row.getCell(8).alignment = { horizontal: "center" };
       if (wd > 0) {
-        row.getCell(6).font = { bold: true, color: { argb: "FF2F7A45" } };
+        row.getCell(7).font = { bold: true, color: { argb: "FF2F7A45" } };
       }
       // 주말은 옅게 칠해 한 주 단위를 눈으로 끊을 수 있게
-      const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
-      if (dow === 0 || dow === 6) {
+      if (weekend) {
         row.eachCell((c) => {
           c.fill = {
             type: "pattern",
@@ -220,28 +250,44 @@ export async function GET(request: Request) {
     // 합계 줄
     const totalRow = ws.getRow(r);
     totalRow.values = [
-      "합계", acc.credit, acc.cod, acc.extra, acc.total, acc.withdrawn, running,
+      "합계", "", acc.credit, acc.cod, acc.extra, acc.total, acc.withdrawn,
+      acc.days,
     ];
     totalRow.font = { bold: true };
     totalRow.getCell(1).alignment = { horizontal: "center" };
-    for (let c = 2; c <= 7; c++) totalRow.getCell(c).numFmt = MONEY;
+    totalRow.getCell(8).alignment = { horizontal: "center" };
+    for (let c = 3; c <= 7; c++) totalRow.getCell(c).numFmt = MONEY;
     totalRow.eachCell((c) => {
       c.border = { top: { style: "double", color: { argb: "FF14161A" } } };
     });
 
+    // 근무일수는 평일/주말로 나눠 한 줄 더 적어 둡니다
+    const breakdown = ws.getRow(r + 1);
+    breakdown.getCell(1).value = "근무일수";
+    breakdown.getCell(1).alignment = { horizontal: "center" };
+    breakdown.getCell(3).value =
+      `총 ${acc.days}일  ·  평일 ${acc.weekday}일  ·  주말·휴일 ${acc.weekend}일`;
+    breakdown.font = { bold: true, color: { argb: "FF2F7A45" } };
+
     // 요약 탭에 한 줄 추가
     const sRow = summary.getRow(summary.rowCount + 1);
     sRow.values = [
-      p.name, acc.credit, acc.cod, acc.extra, acc.total, acc.withdrawn, running,
+      p.name, acc.credit, acc.cod, acc.extra, acc.total, acc.withdrawn,
+      acc.days, acc.weekday, acc.weekend,
     ];
-    for (let c = 2; c <= 7; c++) sRow.getCell(c).numFmt = MONEY;
+    for (let c = 2; c <= 6; c++) sRow.getCell(c).numFmt = MONEY;
     sRow.getCell(5).font = { bold: true };
+    for (let c = 7; c <= 9; c++)
+      sRow.getCell(c).alignment = { horizontal: "center" };
 
     totals.credit += acc.credit;
     totals.cod += acc.cod;
     totals.extra += acc.extra;
     totals.total += acc.total;
     totals.withdrawn += acc.withdrawn;
+    totals.days += acc.days;
+    totals.weekday += acc.weekday;
+    totals.weekend += acc.weekend;
   }
 
   // 요약 합계 줄
@@ -253,10 +299,14 @@ export async function GET(request: Request) {
     totals.extra,
     totals.total,
     totals.withdrawn,
-    totals.total - totals.withdrawn,
+    totals.days,
+    totals.weekday,
+    totals.weekend,
   ];
   sTotal.font = { bold: true };
-  for (let c = 2; c <= 7; c++) sTotal.getCell(c).numFmt = MONEY;
+  for (let c = 2; c <= 6; c++) sTotal.getCell(c).numFmt = MONEY;
+  for (let c = 7; c <= 9; c++)
+    sTotal.getCell(c).alignment = { horizontal: "center" };
   sTotal.eachCell((c) => {
     c.border = { top: { style: "double", color: { argb: "FF14161A" } } };
   });

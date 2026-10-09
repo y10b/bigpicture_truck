@@ -95,7 +95,7 @@ export default async function HomePage({
   const editorNames = Object.fromEntries(
     ((peopleRows ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]),
   );
-  // 직원은 오늘 적은 것만 고칠 수 있습니다. 관리자는 제한 없이.
+  // 직원은 이번 주에 일한 것만 고칠 수 있습니다. 관리자는 제한 없이.
   const isAdmin = profile.role === "admin";
   const totals = sumTotals(entries);
   const weekSeries = (weekDaily ?? []) as DayTotals[];

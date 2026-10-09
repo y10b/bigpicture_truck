@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { endOfMonth, startOfMonth, todayKST } from "@/lib/format";
+import { endOfMonth, todayKST } from "@/lib/format";
 import type { Profile } from "@/lib/types";
 import AttendanceView, {
   type AttendanceRow,

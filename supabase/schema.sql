@@ -1384,4 +1384,38 @@ create trigger profiles_protect
   before update on public.profiles
   for each row execute function public.protect_profile_columns();
 
+-- ───────────────────────────────────────────────
+-- 21. 본인 정산 수정 기간을 '그 주' 로 넓힘 (2026-10)
+--
+--     지금까지는 "오늘 적은 것" 만 고칠 수 있었습니다.
+--     며칠 지나서 틀린 걸 발견하면 관리자에게 부탁해야 했는데,
+--     그 주에 일한 건은 본인이 고치게 바꿉니다.
+--
+--     기준은 work_date(일한 날)입니다. created_at(적은 날)으로 잡으면
+--     지난주 것을 오늘 적었을 때 바로 못 고치는 일이 생깁니다.
+--     주는 회사 기준대로 월요일에 시작합니다.
+-- ───────────────────────────────────────────────
+
+/** 그 날짜가 '이번 주(월~일)' 안인지 */
+create or replace function public.is_this_week(d date)
+returns boolean
+language sql
+stable
+set search_path = public
+as $$
+  select d >= date_trunc('week', (now() at time zone 'Asia/Seoul')::date)::date
+     and d <  date_trunc('week', (now() at time zone 'Asia/Seoul')::date)::date + 7;
+$$;
+
+grant execute on function public.is_this_week(date) to authenticated;
+
+drop policy if exists entries_own_update on public.entries;
+create policy entries_own_update on public.entries for update
+  using (user_id = auth.uid() and public.is_this_week(work_date))
+  with check (user_id = auth.uid() and public.is_this_week(work_date));
+
+drop policy if exists entries_own_delete on public.entries;
+create policy entries_own_delete on public.entries for delete
+  using (user_id = auth.uid() and public.is_this_week(work_date));
+
 notify pgrst, 'reload schema';

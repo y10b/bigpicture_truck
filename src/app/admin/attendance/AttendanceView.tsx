@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addLeave, removeLeave } from "@/app/(app)/leave-actions";
 import MonthGrid, { type DayCell } from "@/components/MonthGrid";
-import { Alert, Badge, Button, Card, CardHeader, cn } from "@/components/ui";
+import { Alert, Badge, Card, CardHeader, cn } from "@/components/ui";
 import { prettyDate, prettyMonth, won } from "@/lib/format";
 import type { Profile } from "@/lib/types";
 

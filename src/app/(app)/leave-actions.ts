@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
+import { pushToAdmins } from "@/lib/notify";
+import { prettyDate } from "@/lib/format";
 
 export type LeaveResult = { ok: boolean; error?: string };
 
@@ -39,6 +41,19 @@ export async function addLeave(formData: FormData): Promise<LeaveResult> {
 
   if (error) return { ok: false, error: friendlyError(error.message) };
 
+  // 배차를 다시 짜야 하므로 관리자가 바로 알아야 합니다.
+  // 관리자가 대신 넣어 준 경우에는 이미 아는 일이라 보내지 않습니다.
+  if (requested === me.id) {
+    await pushToAdmins(
+      {
+        title: "월차",
+        body: `${me.name} · ${prettyDate(date)}`,
+        link: "/admin/attendance",
+      },
+      me.id,
+    ).catch(() => {});
+  }
+
   revalidatePath("/leave");
   revalidatePath("/admin/attendance");
   return { ok: true };
@@ -46,11 +61,30 @@ export async function addLeave(formData: FormData): Promise<LeaveResult> {
 
 /** 월차 취소. 본인 것이거나, 관리자면 누구 것이든 지울 수 있습니다. */
 export async function removeLeave(id: string): Promise<LeaveResult> {
-  await requireProfile();
+  const me = await requireProfile();
   const supabase = await createClient();
+
+  // 지우기 전에 어떤 월차였는지 봐 둡니다 (알림에 날짜를 넣으려고)
+  const { data: before } = await supabase
+    .from("leaves")
+    .select("user_id, leave_date")
+    .eq("id", id)
+    .maybeSingle();
 
   const { error } = await supabase.from("leaves").delete().eq("id", id);
   if (error) return { ok: false, error: "취소하지 못했습니다." };
+
+  // 안 알리면 관리자가 계속 쉬는 줄 알고 배차를 비워 둡니다.
+  if (before && before.user_id === me.id) {
+    await pushToAdmins(
+      {
+        title: "월차 취소",
+        body: `${me.name} · ${prettyDate(before.leave_date)}`,
+        link: "/admin/attendance",
+      },
+      me.id,
+    ).catch(() => {});
+  }
 
   revalidatePath("/leave");
   revalidatePath("/admin/attendance");
