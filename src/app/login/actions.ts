@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { landingPath } from "@/lib/landing";
 import { createClient } from "@/lib/supabase/server";
 import { normalizePhone, phoneToEmail } from "@/lib/format";
 
@@ -28,7 +29,7 @@ export async function loginAction(
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, active")
+    .select("role, active, notices_seen_at")
     .eq("id", data.user.id)
     .maybeSingle();
 
@@ -41,7 +42,8 @@ export async function loginAction(
     return { error: "비활성 처리된 계정입니다. 관리자에게 문의해 주세요." };
   }
 
-  redirect(profile.role === "admin" ? "/admin" : "/home");
+  // 로그인 직후에도 안 읽은 공지가 있으면 공지부터 보여 줍니다
+  redirect(await landingPath(profile));
 }
 
 export async function logoutAction() {
