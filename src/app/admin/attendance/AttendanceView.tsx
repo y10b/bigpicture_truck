@@ -60,6 +60,9 @@ export default function AttendanceView({
   const [day, setDay] = useState<string | null>(null);
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
+  // 한 달에 채워야 하는 근무일수 (주말 포함)
+  const MIN_DAYS = 20;
+  const thisMonthView = today.startsWith(month) || month < today.slice(0, 7);
 
   const goMonth = (ym: string) => {
     setDay(null);
@@ -320,7 +323,7 @@ export default function AttendanceView({
       <Card className="overflow-hidden">
         <CardHeader
           title={`${prettyMonth(month)} 직원별 현황`}
-          desc="출근 일수는 하루 마감을 한 날로 셉니다"
+          desc={`출근 일수는 하루 마감을 한 날로 셉니다 · 주말 포함 ${MIN_DAYS}일 기준`}
         />
         <ul className="divide-y divide-ink/6">
           {perPerson.map(({ p, days, opened, leave, yearUsed, year, total }) => (
@@ -334,6 +337,10 @@ export default function AttendanceView({
                 ) : (
                   <Badge>월차 아직</Badge>
                 )}
+                {/* 월차를 썼는데 근무일수가 모자라면 규정이 달라지므로 표시합니다 */}
+                {thisMonthView && leave && days < MIN_DAYS && (
+                  <Badge tone="danger">{MIN_DAYS}일 미달</Badge>
+                )}
                 <span className="tnum ml-auto text-[15px] font-extrabold">
                   {days}
                   <span className="ml-0.5 text-[11px] font-semibold text-ink-4">
@@ -344,6 +351,10 @@ export default function AttendanceView({
               <div className="mt-1 flex items-center gap-2">
                 <p className="tnum text-[12px] text-ink-4">
                   {won(total)}원
+                  {thisMonthView &&
+                    (days >= MIN_DAYS
+                      ? ` · ${MIN_DAYS}일 채움`
+                      : ` · ${MIN_DAYS}일까지 ${MIN_DAYS - days}일`)}
                   {opened > days && ` · 앱만 켠 날 ${opened - days}일`}
                   {` · ${year}년 월차 ${yearUsed}회`}
                 </p>

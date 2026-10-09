@@ -99,7 +99,7 @@ export default async function TeamMemberPage({
           </p>
         </div>
         <div className="grid grid-cols-2 divide-x divide-ink/8">
-          <Stat label="일한 날" value={`${workedDays}일`} />
+          <Stat label="출근" value={`${workedDays}일`} />
           <Stat label="하루 평균" value={`${won(avgPerDay)}원`} />
         </div>
       </Card>

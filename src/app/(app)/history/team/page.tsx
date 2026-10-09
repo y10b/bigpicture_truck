@@ -57,6 +57,8 @@ export default async function TeamHistoryPage({
     period.to,
   );
   const totals = sumTotals(rows);
+  // 사람마다의 출근 일수를 다 더한 값 (사람 × 날)
+  const teamDays = rows.reduce((a, r) => a + r.days, 0);
   const topTotal = rows[0]?.total ?? 0;
 
   return (
@@ -79,7 +81,8 @@ export default async function TeamHistoryPage({
               {period.label} 팀 전체 매출
             </p>
             <p className="tnum text-[12px] font-semibold text-paper/60">
-              총 <span className="text-accent">{totals.count}</span>건
+              총 <span className="text-accent">{totals.count}</span>건 ·{" "}
+              <span className="text-accent">{teamDays}</span>일 출근
             </p>
           </div>
           <p className="tnum mt-1 text-[26px] leading-none font-extrabold">
@@ -138,10 +141,16 @@ export default async function TeamHistoryPage({
                               <Badge tone="neutral">{r.vehicle_type}</Badge>
                             )}
                           </div>
-                          <p className="tnum mt-0.5 text-[12px] text-ink-4">
-                            {r.days}일 · {r.count}건
-                            {r.count > 0 &&
-                              ` · 건당 ${won(Math.round(r.total / r.count))}원`}
+                          <p className="mt-0.5 text-[12px] text-ink-4">
+                            <span className="tnum font-bold text-ink-2">
+                              출근 {r.days}일
+                            </span>
+                            <span className="tnum">
+                              {" · "}
+                              {r.count}건
+                              {r.count > 0 &&
+                                ` · 건당 ${won(Math.round(r.total / r.count))}원`}
+                            </span>
                           </p>
                         </div>
                         <p className="tnum shrink-0 text-[15px] font-extrabold">
