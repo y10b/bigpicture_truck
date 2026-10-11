@@ -27,6 +27,10 @@ const config: CapacitorConfig = {
   android: {
     // 흰 화면이 번쩍이지 않도록 배경을 로고 종이색으로
     backgroundColor: "#f5f3ec",
+    // 배경 위치 플러그인이 요구하는 설정입니다.
+    // 이걸 켜지 않으면 앱을 내려놓고 5분이 지나면 위치가 더 이상 올라오지 않습니다.
+    // https://github.com/capacitor-community/background-geolocation/issues/89
+    useLegacyBridge: true,
   },
 
   ios: {

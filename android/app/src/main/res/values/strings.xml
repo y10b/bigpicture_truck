@@ -4,4 +4,24 @@
     <string name="title_activity_main">BIG PICTURE</string>
     <string name="package_name">kr.bigpicture.settlement</string>
     <string name="custom_url_scheme">kr.bigpicture.settlement</string>
+
+    <!--
+        근무 중 위치를 보내는 동안 알림 표시줄에 계속 떠 있는 알림.
+
+        아이콘을 정해 주지 않으면 런처 아이콘(mipmap/ic_launcher)이 쓰이는데,
+        그건 알림용으로 만든 그림이 아니라서 플러그인 문서대로 문제가 생깁니다.
+          - 기사분이 알림을 지울 수 있게 되어 위치가 끊깁니다
+          - 알림을 눌러도 앱이 아니라 설정 화면이 열립니다
+          - 알림 글자가 엉뚱하게 나옵니다
+        푸시 알림에 쓰는 트럭 실루엣을 같이 씁니다.
+    -->
+    <string name="capacitor_background_geolocation_notification_icon">
+        drawable/ic_stat_notify
+    </string>
+    <string name="capacitor_background_geolocation_notification_channel_name">
+        근무 중 위치 공유
+    </string>
+    <string name="capacitor_background_geolocation_notification_color">
+        #4a8f3a
+    </string>
 </resources>
