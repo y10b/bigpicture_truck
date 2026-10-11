@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { saveLocation } from "@/app/(app)/location-actions";
-import { TRACK_FROM_HOUR, TRACK_TO_HOUR } from "@/lib/tracking";
+import { MANDATORY_TO_HOUR, hourKST, shouldTrackNow } from "@/lib/tracking";
 import type { BackgroundGeolocationPlugin } from "@capacitor-community/background-geolocation";
 
 /** 이 거리(m) 이상 움직였을 때만 새 위치를 받습니다. */
@@ -10,16 +10,6 @@ const DISTANCE_FILTER = 150;
 
 /** 아무리 자주 움직여도 이 간격보다 자주 보내지는 않습니다. */
 const MIN_SEND_GAP_MS = 60_000;
-
-function seoulHour() {
-  return Number(
-    new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Asia/Seoul",
-      hour: "2-digit",
-      hour12: false,
-    }).format(new Date()),
-  );
-}
 
 /**
  * 기사 위치를 관리자가 볼 수 있게 보내는 부분. 앱에서만 동작합니다.
@@ -32,10 +22,15 @@ function seoulHour() {
  *
  * 근무시간(08~22시) 밖에는 보내지 않습니다. 감시가 아니라 업무용이라는 걸
  * 분명히 하려는 것이고, 서버에서도 한 번 더 막습니다.
+ *
+ * 오후 5시까지는 공유를 꺼 두셨어도 보냅니다 — 배송 중에 사고가 나면
+ * 어디 계신지 바로 알아야 해서입니다. 그 뒤로는 켜 두신 경우에만 보냅니다.
  */
 export default function LocationTracker({ enabled }: { enabled: boolean }) {
   useEffect(() => {
-    if (!enabled) return;
+    // 꺼 두셨더라도 필수 구간에는 감시를 걸어야 합니다.
+    // 오후 5시가 지나면 콜백 안에서 걸러집니다.
+    if (!enabled && hourKST() >= MANDATORY_TO_HOUR) return;
 
     let watcherId: string | null = null;
     let plugin: BackgroundGeolocationPlugin | null = null;
@@ -66,9 +61,8 @@ export default function LocationTracker({ enabled }: { enabled: boolean }) {
         (location, error) => {
           if (error || !location) return;
 
-          // 근무시간이 아니면 받은 위치를 그냥 버립니다.
-          const hour = seoulHour();
-          if (hour < TRACK_FROM_HOUR || hour >= TRACK_TO_HOUR) return;
+          // 근무시간이 아니거나, 필수 구간이 끝난 뒤 꺼 두셨으면 버립니다.
+          if (!shouldTrackNow(enabled)) return;
 
           const now = Date.now();
           if (now - lastSentAt < MIN_SEND_GAP_MS) return;

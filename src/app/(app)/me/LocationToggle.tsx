@@ -3,10 +3,14 @@
 import { useState, useTransition } from "react";
 import { setShareLocation } from "../location-actions";
 import { Alert, Card, CardHeader, cn } from "@/components/ui";
+import { MANDATORY_TO_HOUR, TRACK_TO_HOUR } from "@/lib/tracking";
 
 /**
  * 위치 공유 스위치.
- * 회사 폰이고 동의도 받았지만, 본인이 끌 수 있는 자리는 있어야 합니다.
+ *
+ * 오후 5시까지는 회사 규정이라 꺼도 보내집니다. 그래서 이 스위치는
+ * '저녁에도 보낼지' 를 정하는 것입니다 — 끄면 다 꺼지는 줄 알면 안 되니
+ * 무엇이 달라지는지 화면에 분명히 적어 둡니다.
  */
 export default function LocationToggle({ on }: { on: boolean }) {
   const [value, setValue] = useState(on);
@@ -17,9 +21,19 @@ export default function LocationToggle({ on }: { on: boolean }) {
     <Card>
       <CardHeader
         title="위치 공유"
-        desc="근무시간(오전 8시 ~ 밤 10시)에만 켜집니다"
+        desc={`근무시간(오전 8시 ~ 밤 ${TRACK_TO_HOUR - 12}시)에만 켜집니다`}
       />
       <div className="px-4 pb-4">
+        <div className="mb-3 rounded-xl bg-accent-soft px-3.5 py-2.5">
+          <p className="text-[13px] leading-relaxed font-bold text-accent-deep">
+            오후 {MANDATORY_TO_HOUR - 12}시까지는 꺼 두셔도 위치가 갑니다.
+          </p>
+          <p className="mt-1 text-[12px] leading-relaxed text-accent-deep/80">
+            배송 중에 사고가 나거나 급한 일이 생겼을 때 어디 계신지 바로 알아야
+            해서입니다. 아래 스위치는 <b>오후 {MANDATORY_TO_HOUR - 12}시 이후</b>에만
+            적용됩니다.
+          </p>
+        </div>
         <button
           type="button"
           disabled={pending}
@@ -39,12 +53,14 @@ export default function LocationToggle({ on }: { on: boolean }) {
         >
           <span className="min-w-0 text-left">
             <span className="block text-[14px] font-bold">
-              {value ? "공유 중" : "공유 안 함"}
+              {value
+                ? `오후 ${MANDATORY_TO_HOUR - 12}시 이후에도 공유`
+                : `오후 ${MANDATORY_TO_HOUR - 12}시까지만 공유`}
             </span>
             <span className="mt-0.5 block text-[12px] leading-relaxed text-ink-4">
               {value
-                ? "배차와 정산 확인을 위해 관리자가 현재 위치를 봅니다. 밤 10시 이후에는 보내지 않습니다."
-                : "위치를 보내지 않습니다. 저장돼 있던 마지막 위치도 지웠습니다."}
+                ? `밤 ${TRACK_TO_HOUR - 12}시까지 위치가 갑니다. 그 뒤로는 보내지 않습니다.`
+                : `오후 ${MANDATORY_TO_HOUR - 12}시가 지나면 위치를 보내지 않습니다.`}
             </span>
           </span>
           <span

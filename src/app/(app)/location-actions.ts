@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
-import { isWithinTrackingHours } from "@/lib/tracking";
+import { isMandatoryNow, shouldTrackNow } from "@/lib/tracking";
 
 /**
  * 기사 현재 위치를 저장합니다. 사람당 한 줄이라 계속 덮어씁니다.
@@ -21,8 +21,10 @@ export async function saveLocation(input: {
 }): Promise<{ ok: boolean; skipped?: string }> {
   const profile = await requireProfile();
 
-  if (!profile.share_location) return { ok: true, skipped: "위치 공유 꺼짐" };
-  if (!isWithinTrackingHours()) return { ok: true, skipped: "근무시간 아님" };
+  // 오후 5시까지는 꺼 두셨어도 받습니다. 그 뒤로는 켜 두신 경우만.
+  if (!shouldTrackNow(profile.share_location)) {
+    return { ok: true, skipped: "지금은 위치를 받지 않습니다" };
+  }
 
   const { lat, lng } = input;
   if (
@@ -77,7 +79,9 @@ export async function setShareLocation(on: boolean) {
   if (error) return { ok: false, error: "변경에 실패했습니다." };
 
   // 껐으면 마지막으로 남아 있던 위치도 지웁니다.
-  if (!on) {
+  // 다만 필수 구간(오후 5시 이전)에는 어차피 곧 다시 들어오므로 그대로 둡니다 —
+  // 지웠다가 몇 초 뒤 다시 뜨면 관리자 화면이 깜빡이는 것처럼 보입니다.
+  if (!on && !isMandatoryNow()) {
     await supabase.from("driver_locations").delete().eq("user_id", profile.id);
   }
 

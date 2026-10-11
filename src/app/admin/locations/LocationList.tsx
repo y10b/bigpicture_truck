@@ -174,8 +174,8 @@ export default function LocationList({ rows }: { rows: Row[] }) {
               </span>
             </p>
             <p className="mt-0.5 text-[12px] leading-relaxed text-ink-4">
-              앱을 아직 안 깔았거나, 위치 공유를 껐거나, 오늘 아직 앱을 열지
-              않은 경우입니다.
+              앱을 아직 안 깔았거나, 오늘 아직 앱을 열지 않은 경우입니다.
+              오후 5시까지는 공유를 꺼 두셔도 위치가 들어옵니다.
             </p>
           </div>
           <ul className="divide-y divide-ink/6">
@@ -185,7 +185,8 @@ export default function LocationList({ rows }: { rows: Row[] }) {
                 className="flex items-center justify-between gap-3 px-4 py-2.5"
               >
                 <span className="text-[14px] font-semibold">{profile.name}</span>
-                {!profile.share_location && <Badge>공유 꺼둠</Badge>}
+                {/* 오후 5시까지는 꺼 둬도 위치가 오므로, 저녁에만 뜻이 있습니다 */}
+                {!profile.share_location && <Badge>저녁 공유 꺼둠</Badge>}
               </li>
             ))}
           </ul>
