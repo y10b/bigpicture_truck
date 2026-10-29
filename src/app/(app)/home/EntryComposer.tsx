@@ -47,12 +47,14 @@ export default function EntryComposer({
   const [count, setCount] = useState(0);
   const [credit, setCredit] = useState(0);
   const [cod, setCod] = useState(0);
+  const [cash, setCash] = useState(0);
   const [extra, setExtra] = useState(0);
 
   const clear = () => {
     setCount(0);
     setCredit(0);
     setCod(0);
+    setCash(0);
     setExtra(0);
   };
 
@@ -63,8 +65,8 @@ export default function EntryComposer({
     setResetKey((k) => k + 1);
   };
 
-  const canSubmit = count > 0 && credit + cod + extra > 0;
-  const previewTotal = credit + cod + extra;
+  const canSubmit = count > 0 && credit + cod + cash + extra > 0;
+  const previewTotal = credit + cod + cash + extra;
 
   function submit(formData: FormData) {
     setError(undefined);
@@ -154,15 +156,20 @@ export default function EntryComposer({
             <span className="mb-1.5 flex items-baseline gap-1 text-[13px] font-semibold text-ink-2">
               금액 <span className="text-danger">*</span>
               <span className="ml-1 text-[12px] font-normal text-ink-4">
-                신용·착불 중 하나 이상
+                하나 이상
               </span>
             </span>
             <div className="grid grid-cols-2 gap-3">
               <Field label="신용">
                 <MoneyInput name="credit" onValueChange={setCredit} />
               </Field>
-              <Field label="착불">
+              <Field label="착불" hint="앱으로 받은 현금">
                 <MoneyInput name="cod" onValueChange={setCod} />
+              </Field>
+            </div>
+            <div className="mt-3">
+              <Field label="개인 거래" hint="손님과 직접 주고받은 현금">
+                <MoneyInput name="cash" onValueChange={setCash} />
               </Field>
             </div>
           </div>

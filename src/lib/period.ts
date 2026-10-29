@@ -104,13 +104,15 @@ export function resolvePeriod(
  *    (v_daily_totals 뷰 또는 admin_totals_by_day 함수를 쓰세요.)
  */
 export function fillDailySeries(
-  rows: Pick<DayTotals, "work_date" | "count" | "credit" | "cod" | "extra" | "total">[],
+  rows: Pick<DayTotals, "work_date" | "count" | "credit" | "cod" | "extra" | "cash" | "total">[],
   from: string,
   to: string,
 ): DayTotals[] {
   const byDate = new Map<string, DayTotals>();
   for (const d of dateRange(from, to)) {
-    byDate.set(d, { work_date: d, count: 0, credit: 0, cod: 0, extra: 0, total: 0 });
+    byDate.set(d, {
+      work_date: d, count: 0, credit: 0, cod: 0, extra: 0, cash: 0, total: 0,
+    });
   }
   for (const r of rows) {
     const row = byDate.get(r.work_date);
@@ -119,7 +121,9 @@ export function fillDailySeries(
     row.credit += r.credit;
     row.cod += r.cod;
     row.extra += r.extra;
-    row.total += r.total;
+    row.cash += r.cash ?? 0;
+    // entries.total 은 cash 가 빠진 옛 칸이라 직접 더합니다
+    row.total += r.credit + r.cod + r.extra + (r.cash ?? 0);
   }
   return [...byDate.values()];
 }

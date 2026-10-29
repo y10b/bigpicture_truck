@@ -38,7 +38,7 @@ export default async function MemberDetailPage({
       // 합계·그래프는 날짜별로 합쳐진 뷰에서 (1000행 제한을 타지 않게)
       supabase
         .from("v_daily_totals")
-        .select("work_date, count, credit, cod, extra, total")
+        .select("work_date, count, credit, cod, extra, cash, total")
         .eq("user_id", id)
         .gte("work_date", period.from)
         .lte("work_date", period.to)

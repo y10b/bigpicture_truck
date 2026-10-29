@@ -83,6 +83,7 @@ export default function EntryAdminList({
               <div className="space-y-2 bg-paper-2/40 px-4 pt-1 pb-4">
                 {list.map((e) => (
                   <EntryRow
+                    isAdmin
                     key={e.id}
                     entry={e}
                     logs={logs.filter((l) => l.entry_id === e.id)}

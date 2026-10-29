@@ -33,7 +33,12 @@ export type Entry = {
   credit: number;
   cod: number;
   extra: number;
+  /** 개인 거래(현금) — 제3자 없이 고객과 1:1 로 직접 받은 현금 */
+  cash: number;
+  /** [옛 칸] cash 가 빠진 합계. 쓰지 마세요 — 합계는 sumTotals 로 구합니다. */
   total: number;
+  /** 세금 신고 대상 여부. 관리자만 바꿀 수 있습니다. */
+  taxable: boolean;
   /** 지출 — 충전비·주유·톨 등 (선택). 매출/실수령 계산에는 넣지 않습니다. */
   expense: number;
   /** 운행 시간(분) (선택) */
@@ -121,7 +126,11 @@ export type DayTotals = {
   credit: number;
   cod: number;
   extra: number;
+  /** 개인 거래(현금) */
+  cash: number;
   total: number;
+  /** 관리자가 신고 대상으로 체크해 둔 금액 (v_daily_totals 에서만 옵니다) */
+  taxable_total?: number;
   /** 선택 입력이라 0일 수 있습니다 */
   expense?: number;
   minutes?: number;

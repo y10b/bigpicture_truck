@@ -85,7 +85,7 @@ export async function generateFeedback(
         .limit(100),
       supabase
         .from("v_daily_totals")
-        .select("work_date, count, credit, cod, extra, total")
+        .select("work_date, count, credit, cod, extra, cash, total")
         .eq("user_id", profile.id)
         .gte("work_date", from)
         .lte("work_date", workDate),

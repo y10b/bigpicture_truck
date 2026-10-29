@@ -6,11 +6,13 @@ export type Totals = {
   credit: number;
   cod: number;
   extra: number;
+  /** 개인 거래(현금) — 제3자 없이 고객과 1:1 로 직접 받은 현금 */
+  cash: number;
   total: number;
 };
 
 export function emptyTotals(): Totals {
-  return { count: 0, credit: 0, cod: 0, extra: 0, total: 0 };
+  return { count: 0, credit: 0, cod: 0, extra: 0, cash: 0, total: 0 };
 }
 
 export function sumTotals(rows: Partial<Totals>[]): Totals {
@@ -20,7 +22,11 @@ export function sumTotals(rows: Partial<Totals>[]): Totals {
       credit: a.credit + (r.credit ?? 0),
       cod: a.cod + (r.cod ?? 0),
       extra: a.extra + (r.extra ?? 0),
-      total: a.total + (r.total ?? 0),
+      cash: a.cash + (r.cash ?? 0),
+      // entries.total 은 cash 가 빠진 옛 칸이라 더하지 않고 직접 셉니다
+      total:
+        a.total +
+        (r.credit ?? 0) + (r.cod ?? 0) + (r.extra ?? 0) + (r.cash ?? 0),
     }),
     emptyTotals(),
   );
@@ -52,9 +58,11 @@ export default function TotalsCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 divide-x divide-ink/8">
+      {/* 네 칸이 되면 한 줄에 넣기 좁아서 2x2 로 깝니다 */}
+      <div className="grid grid-cols-2 divide-x divide-y divide-ink/8">
         <Stat label="신용" value={totals.credit} accent="bg-brand-400" />
         <Stat label="착불" value={totals.cod} accent="bg-accent" />
+        <Stat label="개인 거래" value={totals.cash} accent="bg-brand-700" />
         <Stat label="추가금" value={totals.extra} accent="bg-ink-3" />
       </div>
     </Card>

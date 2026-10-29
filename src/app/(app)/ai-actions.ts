@@ -69,7 +69,7 @@ export async function getCoach(force = false): Promise<{
   const [{ data: mine }, { data: team }] = await Promise.all([
     supabase
       .from("v_daily_totals")
-      .select("work_date, count, credit, cod, extra, total")
+      .select("work_date, count, credit, cod, extra, cash, total")
       .eq("user_id", profile.id)
       .gte("work_date", from)
       .lte("work_date", today)

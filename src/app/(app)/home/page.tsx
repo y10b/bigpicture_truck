@@ -71,7 +71,7 @@ export default async function HomePage({
       // 이번 주(월~일) 출금 잔액을 계산하려면 주 단위 집계가 필요합니다.
       supabase
         .from("v_daily_totals")
-        .select("work_date, count, credit, cod, extra, total")
+        .select("work_date, count, credit, cod, extra, cash, total")
         .eq("user_id", profile.id)
         .gte("work_date", weekFrom)
         .lte("work_date", weekTo),

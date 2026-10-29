@@ -62,10 +62,11 @@ export async function addBulkEntry(formData: FormData): Promise<ActionResult> {
   const count = toInt(formData.get("count"));
   const credit = toInt(formData.get("credit"));
   const cod = toInt(formData.get("cod"));
+  const cash = toInt(formData.get("cash"));
   const extra = toInt(formData.get("extra"));
   const memo = String(formData.get("memo") ?? "").trim() || null;
 
-  if (count === 0 && credit === 0 && cod === 0 && extra === 0) {
+  if (count === 0 && credit === 0 && cod === 0 && cash === 0 && extra === 0) {
     return { ok: false, error: "건수나 금액을 입력해 주세요." };
   }
 
@@ -76,6 +77,7 @@ export async function addBulkEntry(formData: FormData): Promise<ActionResult> {
     count,
     credit,
     cod,
+    cash,
     extra,
     expense: toInt(formData.get("expense")),
     minutes: toInt(formData.get("minutes")) || null,
@@ -105,9 +107,10 @@ export async function updateEntry(formData: FormData): Promise<ActionResult> {
   const count = toInt(formData.get("count"));
   const credit = toInt(formData.get("credit"));
   const cod = toInt(formData.get("cod"));
+  const cash = toInt(formData.get("cash"));
   const extra = toInt(formData.get("extra"));
 
-  if (count === 0 && credit === 0 && cod === 0 && extra === 0) {
+  if (count === 0 && credit === 0 && cod === 0 && cash === 0 && extra === 0) {
     return { ok: false, error: "건수나 금액을 입력해 주세요." };
   }
 
@@ -117,6 +120,7 @@ export async function updateEntry(formData: FormData): Promise<ActionResult> {
       count: count || 1,
       credit,
       cod,
+      cash,
       extra,
       expense: toInt(formData.get("expense")),
       minutes: toInt(formData.get("minutes")) || null,
@@ -146,3 +150,31 @@ export async function deleteEntry(id: string): Promise<ActionResult> {
   revalidatePath("/admin", "layout");
   return { ok: true };
 }
+
+/**
+ * 세금 신고 대상 표시 — 관리자만.
+ *
+ * 어떤 거래가 신고 대상인지는 회사가 판단할 일이라 앱이 유형으로
+ * 자동 분류하지 않습니다. 관리자가 직접 체크합니다.
+ */
+export async function setEntryTaxable(
+  id: string,
+  taxable: boolean,
+): Promise<ActionResult> {
+  const profile = await requireProfile();
+  if (profile.role !== "admin") {
+    return { ok: false, error: "관리자만 표시할 수 있습니다." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("entries")
+    .update({ taxable })
+    .eq("id", id);
+
+  if (error) return { ok: false, error: "표시에 실패했습니다." };
+
+  revalidatePath("/admin", "layout");
+  return { ok: true };
+}
+

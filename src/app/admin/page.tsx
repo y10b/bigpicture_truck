@@ -48,7 +48,7 @@ export default async function AdminDashboard({
     // 오늘 입력 현황 — 오늘 일한 사람 수만큼
     supabase
       .from("v_daily_totals")
-      .select("user_id, count, credit, cod, extra, total")
+      .select("user_id, count, credit, cod, extra, cash, total")
       .eq("work_date", today),
     // 직원 표는 작으므로 그대로 읽어 뱃지(관리자/비활성)에 씁니다.
     supabase.from("profiles").select("id, role, active, vehicle_no, vehicle_type"),

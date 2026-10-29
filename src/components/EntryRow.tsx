@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deleteEntry, updateEntry } from "@/app/(app)/entry-actions";
+import {
+  deleteEntry,
+  setEntryTaxable,
+  updateEntry,
+} from "@/app/(app)/entry-actions";
 import { Alert, Badge, Button, Card, Field, Input, cn } from "@/components/ui";
 import MoneyInput from "@/components/MoneyInput";
 import { prettyDate, prettyDateTime, won } from "@/lib/format";
@@ -58,6 +62,7 @@ export default function EntryRow({
   canEdit,
   lockedReason,
   editorNames,
+  isAdmin = false,
 }: {
   entry: Entry;
   /** 이 항목의 수정 이력 (최신순) */
@@ -67,6 +72,8 @@ export default function EntryRow({
   lockedReason?: string;
   /** 수정한 사람 id → 이름 */
   editorNames: Record<string, string>;
+  /** 관리자에게만 '세금 신고 대상' 체크를 보여 줍니다 */
+  isAdmin?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
@@ -113,11 +120,38 @@ export default function EntryRow({
                 수정 {logs.length}회
               </button>
             )}
+            {/* 신고 대상 여부는 회사가 판단할 일이라 관리자가 직접 체크합니다 */}
+            {isAdmin ? (
+              <button
+                onClick={() =>
+                  startTransition(async () => {
+                    setError(undefined);
+                    const res = await setEntryTaxable(entry.id, !entry.taxable);
+                    if (!res.ok) setError(res.error);
+                  })
+                }
+                className={cn(
+                  "rounded-md px-1.5 py-0.5 text-[11px] font-bold transition-colors",
+                  entry.taxable
+                    ? "bg-brand-500 text-white"
+                    : "border border-dashed border-ink/25 text-ink-4",
+                )}
+              >
+                {entry.taxable ? "✓ 신고 대상" : "신고 대상?"}
+              </button>
+            ) : (
+              entry.taxable && (
+                <span className="rounded-md bg-brand-500 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                  신고 대상
+                </span>
+              )
+            )}
           </div>
 
           {entry.mode === "bulk" && (
             <p className="tnum mt-1.5 text-[12px] text-ink-3">
               신용 {won(entry.credit)} · 착불 {won(entry.cod)}
+              {entry.cash > 0 && ` · 개인 ${won(entry.cash)}`}
             </p>
           )}
 
@@ -136,7 +170,7 @@ export default function EntryRow({
 
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <span className="tnum text-[17px] font-extrabold">
-            {won(entry.total)}
+            {won(entry.credit + entry.cod + entry.cash + entry.extra)}
             <span className="ml-0.5 text-[12px] font-semibold text-ink-4">원</span>
           </span>
 
@@ -252,6 +286,7 @@ function EditForm({
             const amount = String(fd.get("amount") ?? "");
             fd.set("credit", kind === "credit" ? amount : "0");
             fd.set("cod", kind === "cod" ? amount : "0");
+            fd.set("cash", String(entry.cash));
           }
           setError(undefined);
           startTransition(async () => {
@@ -305,8 +340,14 @@ function EditForm({
             <Field label="신용">
               <MoneyInput name="credit" defaultValue={entry.credit} />
             </Field>
-            <Field label="착불">
+            <Field label="착불" hint="앱 현금">
               <MoneyInput name="cod" defaultValue={entry.cod} />
+            </Field>
+            <Field label="개인 거래" hint="직접 현금">
+              <MoneyInput name="cash" defaultValue={entry.cash} />
+            </Field>
+            <Field label="추가금">
+              <MoneyInput name="extra" defaultValue={entry.extra} />
             </Field>
             <Field label="건수">
               <Input
@@ -315,9 +356,6 @@ function EditForm({
                 defaultValue={entry.count}
                 className="tnum text-right text-[17px] font-semibold"
               />
-            </Field>
-            <Field label="추가금">
-              <MoneyInput name="extra" defaultValue={entry.extra} />
             </Field>
           </div>
         )}
