@@ -1,10 +1,18 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { endOfWeek, prettyDate, startOfWeek, todayKST, won } from "@/lib/format";
+import {
+  endOfWeek,
+  prettyDate,
+  recentDates,
+  startOfWeek,
+  todayKST,
+  won,
+} from "@/lib/format";
 import { settleFromDaily } from "@/lib/settlement";
 import type { DayTotals, Entry, EntryLog, Withdrawal } from "@/lib/types";
 import type { Coach } from "../ai-actions";
 import DateNav from "@/components/DateNav";
+import RecentDays, { type DayMark } from "@/components/RecentDays";
 import TotalsCard, { sumTotals } from "@/components/TotalsCard";
 import { Card } from "@/components/ui";
 import Reminders from "@/components/Reminders";
@@ -28,7 +36,12 @@ export default async function HomePage({
   const weekTo = endOfWeek(workDate);
 
   const supabase = await createClient();
+  // 최근 7일 — 어제가 비어 있는 걸 보여 주려면 주 경계를 넘겨 봐야 합니다
+  const recent = recentDates(7, today);
+
   const [
+    { data: recentDaily },
+    { data: recentLeaves },
     { data: entryData },
     { data: weekDaily },
     { data: weekWithdrawals },
@@ -37,6 +50,17 @@ export default async function HomePage({
     { data: peopleRows },
     { data: distRow },
   ] = await Promise.all([
+      supabase
+        .from("v_daily_totals")
+        .select("work_date")
+        .eq("user_id", profile.id)
+        .gte("work_date", recent[0])
+        .lte("work_date", today),
+      supabase
+        .from("leaves")
+        .select("leave_date")
+        .gte("leave_date", recent[0])
+        .lte("leave_date", today),
       supabase
         .from("entries")
         .select("*")
@@ -98,6 +122,19 @@ export default async function HomePage({
   // 직원은 이번 주에 일한 것만 고칠 수 있습니다. 관리자는 제한 없이.
   const isAdmin = profile.role === "admin";
   const totals = sumTotals(entries);
+
+  // 최근 7일 중 어느 날이 비어 있는지
+  const doneDates = new Set(
+    ((recentDaily ?? []) as { work_date: string }[]).map((d) => d.work_date),
+  );
+  const leaveDates = new Set(
+    ((recentLeaves ?? []) as { leave_date: string }[]).map((l) => l.leave_date),
+  );
+  const recentMarks: DayMark[] = recent.map((d) => ({
+    date: d,
+    done: doneDates.has(d),
+    leave: leaveDates.has(d),
+  }));
   const weekSeries = (weekDaily ?? []) as DayTotals[];
   const allWithdrawals = (weekWithdrawals ?? []) as Withdrawal[];
   const weekWithdrawn = allWithdrawals.reduce((a, w) => a + w.amount, 0);
@@ -126,6 +163,9 @@ export default async function HomePage({
           {profile.name}님, 오늘도 안전운행 하세요
         </h1>
         <DateNav date={workDate} />
+        <div className="mt-2.5">
+          <RecentDays days={recentMarks} selected={workDate} />
+        </div>
       </div>
 
       <TotalsCard label={`${prettyDate(workDate)} 정산`} totals={totals} />

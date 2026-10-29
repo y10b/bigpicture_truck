@@ -128,3 +128,12 @@ export function dateRange(from: string, to: string) {
   }
   return out;
 }
+
+/**
+ * 최근 N일 날짜 목록 (오래된 날 → 오늘).
+ * 정산입력 화면에서 "어느 날이 비었는지" 를 보여 주는 데 씁니다.
+ */
+export function recentDates(n = 7, today = todayKST()) {
+  return Array.from({ length: n }, (_, i) => addDays(today, i - (n - 1)));
+}
+
