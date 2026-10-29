@@ -103,7 +103,11 @@ export type UserTotals = {
   credit: number;
   cod: number;
   extra: number;
+  /** 개인 거래(현금) */
+  cash: number;
   total: number;
+  /** 관리자가 신고 대상으로 체크해 둔 금액 */
+  taxable_total: number;
   /** 근무일수 */
   days: number;
   /** 기간 내 출금 합계 */
