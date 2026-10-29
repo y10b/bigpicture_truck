@@ -135,6 +135,11 @@ export type DayTotals = {
   total: number;
   /** 관리자가 신고 대상으로 체크해 둔 금액 (v_daily_totals 에서만 옵니다) */
   taxable_total?: number;
+  /** 신고 대상 금액을 항목별로 — 엑셀에서 항목을 빼고 뽑을 때 씁니다 */
+  taxable_credit?: number;
+  taxable_cod?: number;
+  taxable_extra?: number;
+  taxable_cash?: number;
   /** 선택 입력이라 0일 수 있습니다 */
   expense?: number;
   minutes?: number;

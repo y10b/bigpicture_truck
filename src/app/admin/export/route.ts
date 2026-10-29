@@ -57,6 +57,11 @@ export async function GET(request: Request) {
   await requireAdmin();
 
   const url = new URL(request.url);
+  // 개인 거래·추가금은 빼고 뽑아야 할 때가 있습니다. 빼면 칸도 합계도 빠집니다.
+  // 값이 없으면 넣는 쪽이 기본입니다 (예전 주소로 눌러도 전처럼 나옵니다).
+  const withCash = url.searchParams.get("cash") !== "0";
+  const withExtra = url.searchParams.get("extra") !== "0";
+
   const period = resolvePeriod(
     url.searchParams.get("period") ?? undefined,
     url.searchParams.get("from") ?? undefined,
@@ -74,7 +79,7 @@ export async function GET(request: Request) {
     fetchAll<DayTotals & { user_id: string }>((from, to) =>
       supabase
         .from("v_daily_totals")
-        .select("user_id, work_date, count, credit, cod, extra, cash, total, taxable_total")
+        .select("user_id, work_date, count, credit, cod, extra, cash, total, taxable_credit, taxable_cod, taxable_extra, taxable_cash")
         .gte("work_date", period.from)
         .lte("work_date", period.to)
         .order("work_date", { ascending: true })
@@ -136,6 +141,27 @@ export async function GET(request: Request) {
     period.to === endOfMonth(period.from);
   const MIN_DAYS = 20;
 
+  // 항목을 빼면 칸 번호가 밀립니다. 고정 숫자를 쓰면 금방 어긋나서 여기서 셉니다.
+  const col = (() => {
+    let c = 5; // 1 날짜 · 2 요일 · 3 신용 · 4 착불
+    const cash = withCash ? c++ : 0;
+    const extra = withExtra ? c++ : 0;
+    return {
+      cash, extra,
+      total: c++, tax: c++, withdrawn: c++, days: c++, note: c++,
+    };
+  })();
+  const sumCol = (() => {
+    let c = 4; // 1 이름 · 2 신용 · 3 착불
+    const cash = withCash ? c++ : 0;
+    const extra = withExtra ? c++ : 0;
+    return {
+      cash, extra,
+      total: c++, taxIn: c++, taxOut: c++, withdrawn: c++,
+      days: c++, weekday: c++, weekend: c++, leave: c++, minDays: c++,
+    };
+  })();
+
   const wb = new ExcelJS.Workbook();
   wb.creator = "BIG PICTURE 정산관리";
   wb.created = new Date();
@@ -144,21 +170,27 @@ export async function GET(request: Request) {
   const summary = wb.addWorksheet("전체 요약", {
     views: [{ state: "frozen", ySplit: 3 }],
   });
-  summary.mergeCells("A1:N1");
+  // 칸 수가 달라지므로 병합 범위도 같이 움직입니다
+  const colLetter = (n: number) => String.fromCharCode(64 + n);
+  summary.mergeCells(`A1:${colLetter(sumCol.minDays)}1`);
   summary.getCell("A1").value = `BIG PICTURE 정산 — ${period.label}`;
   summary.getCell("A1").font = { size: 14, bold: true };
   summary.getCell("A2").value = `${period.from} ~ ${period.to}`;
   summary.getCell("A2").font = { size: 10, color: { argb: "FF888888" } };
 
   const sumHeader = [
-    "이름", "신용", "착불", "개인거래", "추가금", "합계",
-    "신고대상", "신고제외", "출금",
+    "이름", "신용", "착불",
+    ...(withCash ? ["개인거래"] : []),
+    ...(withExtra ? ["추가금"] : []),
+    "합계", "신고대상", "신고제외", "출금",
     "근무일수", "평일", "주말·휴일", "월차",
     ...(isWholeMonth ? [`${MIN_DAYS}일 충족`] : []),
   ];
   summary.getRow(3).values = sumHeader;
   summary.columns = [
-    { width: 14 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 12 },
+    { width: 14 }, { width: 13 }, { width: 13 },
+    ...(withCash ? [{ width: 13 }] : []),
+    ...(withExtra ? [{ width: 12 }] : []),
     { width: 15 }, { width: 14 }, { width: 14 }, { width: 13 },
     { width: 11 }, { width: 9 }, { width: 11 }, { width: 13 },
     ...(isWholeMonth ? [{ width: 11 }] : []),
@@ -192,7 +224,7 @@ export async function GET(request: Request) {
       views: [{ state: "frozen", ySplit: 4 }],
     });
 
-    ws.mergeCells("A1:K1");
+    ws.mergeCells(`A1:${colLetter(col.note)}1`);
     ws.getCell("A1").value = `${p.name} — ${period.label}`;
     ws.getCell("A1").font = { size: 13, bold: true };
     ws.getCell("A2").value = [
@@ -205,13 +237,16 @@ export async function GET(request: Request) {
     ws.getCell("A2").font = { size: 10, color: { argb: "FF888888" } };
 
     ws.getRow(4).values = [
-      "날짜", "요일", "신용", "착불", "개인거래", "추가금", "합계",
-      "신고", "출금", "누적 근무일수", "비고",
+      "날짜", "요일", "신용", "착불",
+      ...(withCash ? ["개인거래"] : []),
+      ...(withExtra ? ["추가금"] : []),
+      "합계", "신고", "출금", "누적 근무일수", "비고",
     ];
     ws.columns = [
       { width: 13 }, { width: 7 }, { width: 12 }, { width: 12 },
-      { width: 12 }, { width: 12 }, { width: 14 },
-      { width: 7 }, { width: 13 }, { width: 13 }, { width: 10 },
+      ...(withCash ? [{ width: 12 }] : []),
+      ...(withExtra ? [{ width: 12 }] : []),
+      { width: 14 }, { width: 7 }, { width: 13 }, { width: 13 }, { width: 10 },
     ];
     styleHeader(ws.getRow(4));
 
@@ -232,10 +267,15 @@ export async function GET(request: Request) {
 
       const credit = d?.credit ?? 0;
       const cod = d?.cod ?? 0;
-      const extra = d?.extra ?? 0;
-      const cash = d?.cash ?? 0;
+      const extra = withExtra ? (d?.extra ?? 0) : 0;
+      const cash = withCash ? (d?.cash ?? 0) : 0;
       const total = credit + cod + extra + cash;
-      const taxable = d?.taxable_total ?? 0;
+      // 신고 대상도 뺀 항목을 빼고 셉니다. 안 그러면 합계와 안 맞습니다.
+      const taxable =
+        (d?.taxable_credit ?? 0) +
+        (d?.taxable_cod ?? 0) +
+        (withCash ? (d?.taxable_cash ?? 0) : 0) +
+        (withExtra ? (d?.taxable_extra ?? 0) : 0);
 
       const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
       const weekend = dow === 0 || dow === 6;
@@ -259,7 +299,10 @@ export async function GET(request: Request) {
 
       const row = ws.getRow(r++);
       row.values = [
-        date, WEEKDAY[dow], credit, cod, cash, extra, total,
+        date, WEEKDAY[dow], credit, cod,
+        ...(withCash ? [cash] : []),
+        ...(withExtra ? [extra] : []),
+        total,
         // 관리자가 신고 대상으로 체크한 금액이 있으면 O
         taxable > 0 ? "O" : null,
         wd || null,
@@ -268,20 +311,22 @@ export async function GET(request: Request) {
       ];
       row.getCell(1).alignment = { horizontal: "center" };
       row.getCell(2).alignment = { horizontal: "center" };
-      for (let c = 3; c <= 7; c++) row.getCell(c).numFmt = MONEY;
-      row.getCell(7).font = { bold: true };
-      row.getCell(9).numFmt = MONEY;
-      for (const c of [8, 10, 11]) {
+      for (let c = 3; c <= col.total; c++) row.getCell(c).numFmt = MONEY;
+      row.getCell(col.total).font = { bold: true };
+      row.getCell(col.withdrawn).numFmt = MONEY;
+      for (const c of [col.tax, col.days, col.note]) {
         row.getCell(c).alignment = { horizontal: "center" };
       }
       if (taxable > 0) {
-        row.getCell(8).font = { bold: true, color: { argb: "FF2F7A45" } };
+        row.getCell(col.tax).font = { bold: true, color: { argb: "FF2F7A45" } };
       }
       if (wd > 0) {
-        row.getCell(9).font = { bold: true, color: { argb: "FF2F7A45" } };
+        row.getCell(col.withdrawn).font = {
+          bold: true, color: { argb: "FF2F7A45" },
+        };
       }
       if (onLeave) {
-        row.getCell(11).font = { bold: true, color: { argb: "FF9A6B00" } };
+        row.getCell(col.note).font = { bold: true, color: { argb: "FF9A6B00" } };
       }
       // 주말은 옅게 칠해 한 주 단위를 눈으로 끊을 수 있게
       if (weekend) {
@@ -298,15 +343,17 @@ export async function GET(request: Request) {
     // 합계 줄
     const totalRow = ws.getRow(r);
     totalRow.values = [
-      "합계", "", acc.credit, acc.cod, acc.cash, acc.extra, acc.total,
-      "", acc.withdrawn, acc.days,
+      "합계", "", acc.credit, acc.cod,
+      ...(withCash ? [acc.cash] : []),
+      ...(withExtra ? [acc.extra] : []),
+      acc.total, "", acc.withdrawn, acc.days,
       myLeave.size > 0 ? `월차 ${myLeave.size}일` : null,
     ];
     totalRow.font = { bold: true };
     totalRow.getCell(1).alignment = { horizontal: "center" };
-    totalRow.getCell(10).alignment = { horizontal: "center" };
-    for (let c = 3; c <= 7; c++) totalRow.getCell(c).numFmt = MONEY;
-    totalRow.getCell(9).numFmt = MONEY;
+    totalRow.getCell(col.days).alignment = { horizontal: "center" };
+    for (let c = 3; c <= col.total; c++) totalRow.getCell(c).numFmt = MONEY;
+    totalRow.getCell(col.withdrawn).numFmt = MONEY;
     totalRow.eachCell((c) => {
       c.border = { top: { style: "double", color: { argb: "FF14161A" } } };
     });
@@ -353,20 +400,26 @@ export async function GET(request: Request) {
         ? "—"
         : [...myLeave].sort().map((d) => d.slice(5)).join(", ");
     sRow.values = [
-      p.name, acc.credit, acc.cod, acc.cash, acc.extra, acc.total,
-      acc.taxable, acc.total - acc.taxable, acc.withdrawn,
+      p.name, acc.credit, acc.cod,
+      ...(withCash ? [acc.cash] : []),
+      ...(withExtra ? [acc.extra] : []),
+      acc.total, acc.taxable, acc.total - acc.taxable, acc.withdrawn,
       acc.days, acc.weekday, acc.weekend, leaveLabel,
       ...(isWholeMonth ? [acc.days >= MIN_DAYS ? "O" : "X"] : []),
     ];
-    for (let c = 2; c <= 9; c++) sRow.getCell(c).numFmt = MONEY;
-    sRow.getCell(6).font = { bold: true };
-    for (let c = 10; c <= 14; c++)
+    for (let c = 2; c <= sumCol.withdrawn; c++) sRow.getCell(c).numFmt = MONEY;
+    sRow.getCell(sumCol.total).font = { bold: true };
+    for (let c = sumCol.days; c <= sumCol.minDays; c++)
       sRow.getCell(c).alignment = { horizontal: "center" };
     // 월차를 썼는데 20일을 못 채운 사람은 눈에 띄게
     if (isWholeMonth && acc.days < MIN_DAYS) {
-      sRow.getCell(14).font = { bold: true, color: { argb: "FFB3261E" } };
+      sRow.getCell(sumCol.minDays).font = {
+        bold: true, color: { argb: "FFB3261E" },
+      };
       if (myLeave.size > 0) {
-        sRow.getCell(13).font = { bold: true, color: { argb: "FFB3261E" } };
+        sRow.getCell(sumCol.leave).font = {
+          bold: true, color: { argb: "FFB3261E" },
+        };
       }
     }
 
@@ -388,8 +441,8 @@ export async function GET(request: Request) {
     "전체",
     totals.credit,
     totals.cod,
-    totals.cash,
-    totals.extra,
+    ...(withCash ? [totals.cash] : []),
+    ...(withExtra ? [totals.extra] : []),
     totals.total,
     totals.taxable,
     totals.total - totals.taxable,
@@ -401,8 +454,8 @@ export async function GET(request: Request) {
     ...(isWholeMonth ? [""] : []),
   ];
   sTotal.font = { bold: true };
-  for (let c = 2; c <= 9; c++) sTotal.getCell(c).numFmt = MONEY;
-  for (let c = 10; c <= 14; c++)
+  for (let c = 2; c <= sumCol.withdrawn; c++) sTotal.getCell(c).numFmt = MONEY;
+  for (let c = sumCol.days; c <= sumCol.minDays; c++)
     sTotal.getCell(c).alignment = { horizontal: "center" };
   sTotal.eachCell((c) => {
     c.border = { top: { style: "double", color: { argb: "FF14161A" } } };
